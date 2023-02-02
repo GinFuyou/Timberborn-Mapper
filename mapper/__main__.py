@@ -20,6 +20,7 @@ from maps.format import TimberbornMap, TimberbornSingletons
 from maps.heightmap import ImageToTimberbornHeightmapLinearConversionSpec, ImageToTimberbornHeightmapSpec, read_heightmap
 from maps.treemap import ImageToTimberbornTreemapSpec, read_tree_map
 from maps.watermap import read_water_map
+from maps.gamemap import is_game_map, read_game_map
 
 try:
     import tomllib
@@ -34,7 +35,7 @@ else:
 # |_|  |_\__,_|_|_||_|
 # Main
 
-__version__ = "0.3.6-b-1"
+__version__ = "0.3.7-a-1"
 
 APPNAME = "TimberbornMapper"
 APP_AUTHOR = "MattMcMullan"
@@ -288,12 +289,22 @@ def manual_image_to_timberborn(args: Any) -> None:
     )
 
 
-def specfile_to_timberborn(args: Any) -> None:
-    with open(args.input, "r") as f:
-        specdict = json.load(f)
+def read_json_input(config: Any) -> None:
+    with open(config.input, "r") as f:
+        data = json.load(f)
+    if "heightmap" in data.keys():
+        logging.info("Found key 'heightmap' in json data, processing as spec file")
+        specfile_to_timberborn(data, config)
+    elif is_game_map(data):
+        logging.info(f"File looks like game map format, game version stated: {data.get('GameVersion', None)}")
+        read_game_map(data)
+    else:
+        logging.error("Can't identify file by content!")
 
-    output_path = make_output_path(args)
-    image_to_timberborn(ImageToTimberbornSpec(**specdict), args.input.parent, output_path, args)
+
+def specfile_to_timberborn(specdict: dict, config: Any) -> None:
+    output_path = make_output_path(config)
+    image_to_timberborn(ImageToTimberbornSpec(**specdict), config.input.parent, output_path, config)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -502,8 +513,8 @@ def main() -> None:
     # wrapping execution in exception catcher to halt window form closing in interactive mode
     try:
         if config.input.suffix.lower() == ".json":
-            logging.info("JSON file will be processed as spec file")
-            specfile_to_timberborn(config)
+            logging.debug("JSON file will be read and handled based on contents")
+            read_json_input(config)
         else:
             logging.info("File will be verified and processed like an image")
             manual_image_to_timberborn(config)

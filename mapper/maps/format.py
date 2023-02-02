@@ -6,8 +6,21 @@
 # Map Format
 from random import random as pyrandom
 import uuid
-from typing import List, Optional
+from typing import List, Optional, Any, Union
 import logging
+
+
+def trunc_float(value: Union[int, float, str], prec=6):
+    return round(float(value), prec)
+
+
+class LoadMixin():
+    load_args = []
+
+    @classmethod
+    def load(Cls, data: dict):
+        args = [ArgCls(**data[name]) for ArgCls, name in Cls.load_args]
+        return Cls(*args)
 
 
 class TimberbornSize(dict):
@@ -16,31 +29,67 @@ class TimberbornSize(dict):
 
 
 class TimberbornArray(dict):
+    """ string-encoded array with a given delimeter """
+    delimeter = " "
+
     def __init__(self, Array: List[object]):
 
-        array_str = " ".join([str(x) for x in Array])
-
+        array_str = self.delimeter.join([str(x) for x in Array])
         dict.__init__(self, Array=array_str)
 
+    @classmethod
+    def load(Cls, Array: str, element_coerce: Any = int, delimeter: str = ""):
+        if not delimeter:
+            delimeter = Cls.delimeter
 
-class TimberbornMapSize(dict):
+        array_list = [element_coerce(i) for i in Array.split(Cls.delimeter)]
+        return Cls(array_list)
+
+
+class TimberbornMapSize(dict, LoadMixin):
+    """ MapSize Singleton """
+    load_args = [(TimberbornSize, 'Size')]
+
     def __init__(self, Size: TimberbornSize):
         dict.__init__(self, Size=Size)
 
+    """
+    @classmethod
+    def load(Cls, data: dict):
+        return Cls(TimberbornSize(**data['Size']))
+    """
+
 
 class TimberbornTerrainMap(dict):
+    """ TerrainMap Singleton """
     def __init__(self, Heights: TimberbornArray):
         dict.__init__(self, Heights=Heights)
+
+    @classmethod
+    def load(Cls, data: dict):
+        return Cls(TimberbornArray.load(element_coerce=int, **data['Heights']))
 
 
 class TimberbornSoilMoistureSimulator(dict):
     def __init__(self, MoistureLevels: TimberbornArray):
         dict.__init__(self, MoistureLevels=MoistureLevels)
 
+    @classmethod
+    def load(Cls, data: dict):
+        return Cls(TimberbornArray.load(element_coerce=trunc_float, **data['MoistureLevels']))
+
 
 class TimberbornWaterMap(dict):
     def __init__(self, WaterDepths: TimberbornArray, Outflows: TimberbornArray):
         dict.__init__(self, WaterDepths=WaterDepths, Outflows=Outflows)
+
+    @classmethod
+    def load(Cls, data: dict):
+        obj = Cls(
+            TimberbornArray.load(element_coerce=trunc_float, **data['WaterDepths']),
+            TimberbornArray.load(element_coerce=str, **data['Outflows'])
+        )
+        return obj
 
 
 class TimberbornSingletons(dict):
@@ -61,9 +110,21 @@ class TimberbornSingletons(dict):
 
 
 class TimberbornEntity(dict):
-    def __init__(self, TemplateName: str):
-        id = f"{uuid.uuid4()}"
-        dict.__init__(self, Id=id, TemplateName=TemplateName)
+    """ Enitity consists of Id, Template or TemplateName and Components """
+    def __init__(self, TemplateName: str, Id: Optional[str] = None):
+        if Id is None:
+            Id = f"{uuid.uuid4()}"
+        dict.__init__(self, Id=Id, TemplateName=TemplateName)
+
+    @property
+    def template(self):
+        return self.get("TemplateName") or self.get("Template")
+
+    @classmethod
+    def load(Cls, data: dict):
+        template = data.get('TemplateName') or data.get('Template')
+        obj = Cls(Id=data['Id'], TemplateName=template)  # TODO replace TemplateName with Template ?
+        return obj
 
 
 class TimberbornCoordinates(dict):
