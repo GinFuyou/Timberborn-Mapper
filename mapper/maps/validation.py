@@ -1,5 +1,6 @@
 import logging
-from typing import Union  # Any, List, Optional,
+from typing import Union, Optional  # Any, List, ,
+from enum import Enum
 
 
 class Validator(dict):
@@ -45,3 +46,17 @@ class TreeValidator(Validator):
             "Amount": 2
         }),
     }
+
+    def __init__(self, data: dict = {},  raises: Union[bool, Exception] = False, species: Optional[Enum] = None):
+        super().__init__(data=data, raises=raises)
+        if species:
+            tree_args = species.value[1]
+
+            self["Yielder:Cuttable"]["Amount"] = tree_args['logs']
+            if tree_args.get("gth_good"):
+                self["Yielder:Gatherable"] = {
+                    "Yield": {
+                        "Good": {"Id": tree_args['gth_good'].value},
+                        "Amount": tree_args['gth_amount']
+                    }
+                }

@@ -25,13 +25,22 @@ class Categories(Enum):
 
 
 ENTITY_TEMPLATES = {
-    "Dandelion": {"handle": None, "category": None},
-    "BlueberryBush": {"handle": None, "category": None},
-    "Birch": {"handle": None, "category": Categories.tree, "params": TreeSpecies.birch.value[1]},
-    "Pine": {"handle": None, "category": Categories.tree, "params": TreeSpecies.pine.value[1]},
-    "Maple": {"handle": None, "category": Categories.tree, "params": TreeSpecies.maple.value[1]},
-    "ChestnutTree": {"handle": None, "category": Categories.tree, "params": TreeSpecies.chestnut.value[1]},
-    "WaterSource": {"handle": None, "category": Categories.landscape},  # TODO user right handler
+    "Dandelion": {"validator": None, "category": None},
+    "BlueberryBush": {"validator": None, "category": None},
+    "Birch": {"validator": TreeValidator(species=TreeSpecies.birch),
+              "category": Categories.tree,
+              "params": TreeSpecies.birch.value[1]},
+    "Pine": {
+                "validator": TreeValidator(species=TreeSpecies.pine),
+                "category": Categories.tree, "params": TreeSpecies.pine.value[1]
+            },
+    "Maple": {"validator": TreeValidator(species=TreeSpecies.maple),
+              "category": Categories.tree,
+              "params": TreeSpecies.maple.value[1]},
+    "ChestnutTree": {"validator": TreeValidator(species=TreeSpecies.chestnut),
+                     "category": Categories.tree,
+                     "params": TreeSpecies.chestnut.value[1]},
+    "WaterSource": {"validator": None, "category": Categories.landscape},  # TODO user right handler
 }
 
 
@@ -111,11 +120,13 @@ def read_game_map(data):
                 remove_templates.append(entity.template)
                 continue
 
-        # entity['Components'] = entity_dict['Components']
-        # logging.debug(f'Handler: {handler}')
-        entity['Components'] = {}
-        if template and (template['category'] == Categories.tree):
-            entity['Components'] = TimberbornTreeComponents.load(entity_dict['Components'], _validator=TreeValidator())
+        entity['Components'] = entity_dict['Components']
+        if template:
+            if template['category'] == Categories.tree:
+                entity['Components'] = TimberbornTreeComponents.load(
+                    entity_dict['Components'], _validator=template['validator']
+                )
+
         loaded_entities.append(entity)
 
     logging.debug("Loaded Entities: ")
