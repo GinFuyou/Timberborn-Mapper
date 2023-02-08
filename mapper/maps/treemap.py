@@ -13,9 +13,10 @@ from typing import List, Optional
 
 from image_utils import MapImage
 from maps.format import (TimberbornBlockObject, TimberbornCoordinates, TimberbornCoordinatesOffseter, TimberbornEntity,
-                         TimberbornGrowable, TimberbornLivingNaturalResource, TimberbornNaturalResourceModelRandomizer,
-                         TimberbornOrientation, TimberbornTree, TimberbornTreeComponents, TimberbornWateredObject,
-                         TimberbornYielderCuttable, TimberbornGatherableYieldGrower, TimberbornYielderGatherable)
+                         TimberbornGatherableYieldGrower, TimberbornGrowable, TimberbornLivingNaturalResource,
+                         TimberbornNaturalResourceModelRandomizer, TimberbornOrientation, TimberbornTree,
+                         TimberbornTreeComponents, TimberbornWateredObject, TimberbornYielderCuttable,
+                         TimberbornYielderGatherable)
 
 from .heightmap import Heightmap
 from .watermap import WaterMap

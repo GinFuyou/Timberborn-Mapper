@@ -7,7 +7,7 @@
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Tuple, Union, Any
+from typing import Any, List, Optional, Tuple, Union
 
 from image_utils import MapImage
 from maps.format import TimberbornArray, TimberbornMapSize, TimberbornSize, TimberbornTerrainMap

@@ -4,23 +4,83 @@
 # |_|  |_\__,_| .__/_|\___/_| |_|_|_\__,_|\__|
 #             |_|
 # Map Format
-from random import random as pyrandom
-import uuid
-from typing import List, Optional, Any, Union
 import logging
+import uuid
+from random import random as pyrandom
+from typing import Any, List, Optional, Union
+
+from .validation import Validator
 
 
 def trunc_float(value: Union[int, float, str], prec=6):
     return round(float(value), prec)
 
 
+def trunc_float2(value: Union[int, float, str]):
+    return trunc_float(value, prec=2)
+
+
 class LoadMixin():
     load_args = []
 
     @classmethod
-    def load(Cls, data: dict):
-        args = [ArgCls(**data[name]) for ArgCls, name in Cls.load_args]
-        return Cls(*args)
+    def load(Cls, data: dict, _validator=Validator(), raise_error=True):
+        validator = _validator
+
+        logging.debug(f"{Cls.__name__}.load(): data=`{data}` validator=`{validator}`")  # TODO TEST
+        kwargs = {}
+        errors = []
+        for name, coerce_callable in Cls.load_args:
+            value = data.get(name)
+            # value is not provided but attribute declared as optional
+            was_fixed = False
+            logging.debug(f" - check '{name}' of `{coerce_callable.__name__}`")
+            if value is None:
+                if validator:
+                    try:
+                        value, was_fixed = validator.clean_attr(name)
+                    except Exception as ex:
+                        if raise_error:
+                            raise ex
+                        else:
+                            errors.append(ex)
+                            continue
+
+                    if not was_fixed:
+                        continue  # optional
+                else:
+                    logging.debug("no validatator, skip")
+                    continue
+
+            logging.debug(f" coerce is {type(coerce_callable)}")
+            if isinstance(coerce_callable, type) and issubclass(coerce_callable, LoadMixin):
+                logging.debug(f"will call argument's '{name}' load()")
+                if validator and not was_fixed:
+                    sub_validator = validator.get(name, {})
+                    arg = coerce_callable.load(value, sub_validator, raise_error=raise_error)
+                else:
+                    arg = coerce_callable.load(value, raise_error=raise_error)
+
+            elif type(value) == dict:  # strict check, not isinstance()
+                arg = coerce_callable(**value)
+            else:
+                arg = coerce_callable(value)
+            name = name.replace(':', '')
+            kwargs[name] = arg
+            # logging.debug(f" kwarg '{name}': {arg}")
+
+        logging.debug(f"kwargs: {kwargs}")
+        if errors:
+            logging.error("Validation failed, errors: ")
+            for error in errors:
+                logging.error(f" - {error}")
+            raise ValueError(f"Validation of `{Cls.__name__}` failed!")
+        return Cls(**kwargs)
+
+    def add_if_not_none(self, **kwargs: Any):
+        for key, value in kwargs.items():
+            if value is not None:
+                self[key] = value
 
 
 class TimberbornSize(dict):
@@ -38,7 +98,7 @@ class TimberbornArray(dict):
         dict.__init__(self, Array=array_str)
 
     @classmethod
-    def load(Cls, Array: str, element_coerce: Any = int, delimeter: str = ""):
+    def load(Cls, Array: str, element_coerce: Any = int, delimeter: str = "", _validator=Validator(), raise_error=True):
         if not delimeter:
             delimeter = Cls.delimeter
 
@@ -48,16 +108,10 @@ class TimberbornArray(dict):
 
 class TimberbornMapSize(dict, LoadMixin):
     """ MapSize Singleton """
-    load_args = [(TimberbornSize, 'Size')]
+    load_args = [('Size', TimberbornSize)]
 
     def __init__(self, Size: TimberbornSize):
         dict.__init__(self, Size=Size)
-
-    """
-    @classmethod
-    def load(Cls, data: dict):
-        return Cls(TimberbornSize(**data['Size']))
-    """
 
 
 class TimberbornTerrainMap(dict):
@@ -66,7 +120,7 @@ class TimberbornTerrainMap(dict):
         dict.__init__(self, Heights=Heights)
 
     @classmethod
-    def load(Cls, data: dict):
+    def load(Cls, data: dict, _validator=Validator(), raise_error=True):
         return Cls(TimberbornArray.load(element_coerce=int, **data['Heights']))
 
 
@@ -75,7 +129,7 @@ class TimberbornSoilMoistureSimulator(dict):
         dict.__init__(self, MoistureLevels=MoistureLevels)
 
     @classmethod
-    def load(Cls, data: dict):
+    def load(Cls, data: dict, _validator=Validator(), raise_error=True):
         return Cls(TimberbornArray.load(element_coerce=trunc_float, **data['MoistureLevels']))
 
 
@@ -84,7 +138,7 @@ class TimberbornWaterMap(dict):
         dict.__init__(self, WaterDepths=WaterDepths, Outflows=Outflows)
 
     @classmethod
-    def load(Cls, data: dict):
+    def load(Cls, data: dict, _validator=Validator(), raise_error=True):
         obj = Cls(
             TimberbornArray.load(element_coerce=trunc_float, **data['WaterDepths']),
             TimberbornArray.load(element_coerce=str, **data['Outflows'])
@@ -121,33 +175,51 @@ class TimberbornEntity(dict):
         return self.get("TemplateName") or self.get("Template")
 
     @classmethod
-    def load(Cls, data: dict):
+    def load(Cls, data: dict, _validator=Validator(), raise_error=True):
         template = data.get('TemplateName') or data.get('Template')
         obj = Cls(Id=data['Id'], TemplateName=template)  # TODO replace TemplateName with Template ?
         return obj
 
 
-class TimberbornCoordinates(dict):
+class TimberbornCoordinates(LoadMixin, dict):
+    load_args = (('X', int), ('Y', int), ('Z', int))
+
     def __init__(self, X: int, Y: int, Z: int):
         dict.__init__(self, X=X, Y=Y, Z=Z)
 
 
-class TimberbornOrientation(dict):
+class TimberbornOrientation(LoadMixin, dict):
+    """ Orientation for objects like buildings """
+    load_args = [('Value', str)]  # TODO Rotation Validator
+
     def __init__(self, Value: str = "Cw0"):
         dict.__init__(self, Value=Value)
 
 
-class TimberbornBlockObject(dict):
-    def __init__(self, Coordinates: TimberbornCoordinates, Orientation: TimberbornOrientation):
-        dict.__init__(self, Coordinates=Coordinates, Orientation=Orientation)
+class TimberbornBlockObject(LoadMixin, dict):
+    load_args = (('Coordinates', TimberbornCoordinates), ('Orientation', TimberbornOrientation))
+
+    def __init__(self, Coordinates: TimberbornCoordinates, Orientation: Optional[TimberbornOrientation] = None):
+        dict.__init__(self, Coordinates=Coordinates)
+        if Orientation:
+            self['Orientation'] = Orientation
+
+    @classmethod
+    def load(Cls, data: dict, _validator=Validator(), raise_error=True):
+        print(data)
+        return super().load(data, _validator)
 
 
-class TimberbornGrowable(dict):
+class TimberbornGrowable(LoadMixin, dict):
+    load_args = [("GrowthProgress", trunc_float2)]
+
     def __init__(self, GrowthProgress: float = 1.0):
         dict.__init__(self, GrowthProgress=GrowthProgress)
 
 
-class TimberbornCoordinatesOffset(dict):
+class TimberbornCoordinatesOffset(LoadMixin, dict):
+    load_args = (('X', trunc_float), ('Y', trunc_float))
+
     def __init__(self, X: float, Y: float):
         dict.__init__(self, X=X, Y=Y)
 
@@ -159,6 +231,9 @@ class TimberbornCoordinatesOffseter(dict):
     @classmethod
     def random(cls) -> "TimberbornCoordinatesOffseter":
         return cls(TimberbornCoordinatesOffset(pyrandom() * 0.25, pyrandom() * 0.25))
+
+    # @classmethod
+    # def load(Cls, data: dict):
 
 
 class TimberbornNaturalResourceModelRandomizer(dict):
@@ -176,7 +251,9 @@ class TimberbornNaturalResourceModelRandomizer(dict):
         return TimberbornNaturalResourceModelRandomizer(pyrandom() * 360, scale, scale)
 
 
-class TimberbornYielderCuttable(dict):
+class TimberbornYielderCuttable(LoadMixin, dict):
+    load_args = (('Yield', dict))
+
     def __init__(self, Id: str, Amount: int):
         dict.__init__(
             self,
@@ -187,6 +264,12 @@ class TimberbornYielderCuttable(dict):
                 "Amount": Amount,
             },
         )
+
+    @classmethod
+    def load(Cls, Yield: dict, _validator: Validator = Validator(), raise_error=True):
+        id = Yield['Yield']['Good']['Id']
+        amount = Yield['Yield']['Amount']
+        return Cls(id, amount)
 
 
 # New Gatherable Objects
@@ -218,16 +301,26 @@ class TimberbornPrioritizable(dict):
         dict.__init__(self, Priority={"Value": Priority})
 
 
-class TimberbornTreeComponents(dict):
+class TimberbornTreeComponents(LoadMixin, dict):
+    load_args = (('BlockObject', TimberbornBlockObject),
+                 ('CoordinatesOffseter', TimberbornCoordinatesOffseter),
+                 ('Growable', TimberbornGrowable),
+                 ('LivingNaturalResource', TimberbornLivingNaturalResource),
+                 ('NaturalResourceModelRandomizer', TimberbornNaturalResourceModelRandomizer),
+                 ('WateredObject', TimberbornWateredObject),
+                 ('Yielder:Cuttable', TimberbornYielderCuttable),
+                 ('GatherableYieldGrower', TimberbornGatherableYieldGrower),
+                 ('Yielder:Gatherable', TimberbornYielderGatherable))
+
     def __init__(
         self,
         BlockObject: TimberbornBlockObject,
         CoordinatesOffseter: TimberbornCoordinatesOffseter,
         Growable: TimberbornGrowable,
-        LivingNaturalResource: TimberbornLivingNaturalResource,
         NaturalResourceModelRandomizer: TimberbornNaturalResourceModelRandomizer,
-        WateredObject: TimberbornWateredObject,
         YielderCuttable: TimberbornYielderCuttable,
+        LivingNaturalResource: Optional[TimberbornLivingNaturalResource] = None,
+        WateredObject: Optional[TimberbornWateredObject] = None,
         GatherableYieldGrower: Optional[TimberbornGatherableYieldGrower] = None,
         YielderGatherable: Optional[TimberbornYielderGatherable] = None,
     ):
@@ -238,20 +331,23 @@ class TimberbornTreeComponents(dict):
             CoordinatesOffseter=CoordinatesOffseter,
             Demolishable={},
             Growable=Growable,
-            LivingNaturalResource=LivingNaturalResource,
             NaturalResourceModelRandomizer=NaturalResourceModelRandomizer,
             Prioritizable=TimberbornPrioritizable(),
-            WateredObject=WateredObject,
         )
+        self.add_if_not_none(
+            LivingNaturalResource=LivingNaturalResource,
+            WateredObject=WateredObject
+        )
+
         self["Yielder:Cuttable"] = YielderCuttable
         self["Inventory:GoodStack"] = {"Storage": {"Goods": []}}
         if GatherableYieldGrower:
-            if not YielderGatherable:
-                logging.error("Components spefied GatherableYieldGrower but not YielderGatherable,"
-                              " may result game crashing on map validation.")
-            else:
+            if YielderGatherable:
                 self["GatherableYieldGrower"] = GatherableYieldGrower
                 self["Yielder:Gatherable"] = YielderGatherable
+            else:
+                logging.error("Components specified GatherableYieldGrower but not YielderGatherable,"
+                              " may result game crashing on map validation.")
 
 
 class TimberbornTree(TimberbornEntity):
