@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "timberborn-mapper"
-version = "0.3.6-b"
+version = "0.3.8-a"
 description = "Tool for importing heightmap images as Timberborn custom maps."
 authors = ["Matthew McMullan"]
 license = "BSD 2-Clause \"Simplified\" License"

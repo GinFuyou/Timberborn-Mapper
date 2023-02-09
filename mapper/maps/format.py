@@ -4,10 +4,13 @@
 # |_|  |_\__,_| .__/_|\___/_| |_|_|_\__,_|\__|
 #             |_|
 # Map Format
+import json
 import logging
 import uuid
+from hashlib import sha1
 from random import random as pyrandom
 from typing import Any, List, Optional, Union
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from .validation import Validator
 
@@ -27,14 +30,14 @@ class LoadMixin():
     def load(Cls, data: dict, _validator=Validator(), raise_error=True):
         validator = _validator
 
-        logging.debug(f"{Cls.__name__}.load(): data=`{data}` validator=`{validator}`")  # TODO TEST
+        # logging.debug(f"{Cls.__name__}.load(): data=`{data}` validator=`{validator.__class__.__name__}` {validator}")
         kwargs = {}
         errors = []
         for name, coerce_callable in Cls.load_args:
             value = data.get(name)
             # value is not provided but attribute declared as optional
             was_fixed = False
-            logging.debug(f" - check '{name}' of `{coerce_callable.__name__}`")
+            # logging.debug(f" - check '{name}' of `{coerce_callable.__name__}`")
             if value is None:
                 if validator:
                     try:
@@ -49,14 +52,14 @@ class LoadMixin():
                     if not was_fixed:
                         continue  # optional
                 else:
-                    logging.debug("no validatator, skip")
+                    # logging.debug("no validator, skip")
                     continue
 
-            logging.debug(f" coerce is {type(coerce_callable)}")
+            # logging.debug(f" coerce is {type(coerce_callable)}")
             if isinstance(coerce_callable, type) and issubclass(coerce_callable, LoadMixin):
-                logging.debug(f"will call argument's '{name}' load()")
+                # logging.debug(f"will call argument's '{name}' load()")
                 if validator and not was_fixed:
-                    sub_validator = validator.get(name, {})
+                    sub_validator = validator.get(name, Validator())
                     arg = coerce_callable.load(value, sub_validator, raise_error=raise_error)
                 else:
                     arg = coerce_callable.load(value, raise_error=raise_error)
@@ -102,7 +105,11 @@ class TimberbornArray(dict):
         if not delimeter:
             delimeter = Cls.delimeter
 
-        array_list = [element_coerce(i) for i in Array.split(Cls.delimeter)]
+        try:
+            array_list = [element_coerce(i) for i in Array.strip().split(Cls.delimeter)]
+        except Exception as ex:
+            logging.warning(f"Array parsing error! Array was: '{Array}'")
+            raise ex
         return Cls(array_list)
 
 
@@ -301,16 +308,59 @@ class TimberbornPrioritizable(dict):
         dict.__init__(self, Priority={"Value": Priority})
 
 
-class TimberbornTreeComponents(LoadMixin, dict):
-    load_args = (('BlockObject', TimberbornBlockObject),
+class TimberbornPlantComponennts(LoadMixin, dict):
+    load_args = [('BlockObject', TimberbornBlockObject),
                  ('CoordinatesOffseter', TimberbornCoordinatesOffseter),
                  ('Growable', TimberbornGrowable),
                  ('LivingNaturalResource', TimberbornLivingNaturalResource),
                  ('NaturalResourceModelRandomizer', TimberbornNaturalResourceModelRandomizer),
                  ('WateredObject', TimberbornWateredObject),
-                 ('Yielder:Cuttable', TimberbornYielderCuttable),
                  ('GatherableYieldGrower', TimberbornGatherableYieldGrower),
-                 ('Yielder:Gatherable', TimberbornYielderGatherable))
+                 ('Yielder:Gatherable', TimberbornYielderGatherable)]
+
+    def __init__(
+        self,
+        BlockObject: TimberbornBlockObject,
+        CoordinatesOffseter: TimberbornCoordinatesOffseter,
+        Growable: TimberbornGrowable,
+        NaturalResourceModelRandomizer: TimberbornNaturalResourceModelRandomizer,
+        LivingNaturalResource: Optional[TimberbornLivingNaturalResource] = None,
+        WateredObject: Optional[TimberbornWateredObject] = None,
+        GatherableYieldGrower: Optional[TimberbornGatherableYieldGrower] = None,
+        YielderGatherable: Optional[TimberbornYielderGatherable] = None,
+        YielderCuttable: Optional[TimberbornYielderCuttable] = None
+    ):
+
+        dict.__init__(
+            self,
+            BlockObject=BlockObject,
+            BuilderJob={},
+            CoordinatesOffseter=CoordinatesOffseter,
+            Demolishable={},
+            Growable=Growable,
+            NaturalResourceModelRandomizer=NaturalResourceModelRandomizer,
+            Prioritizable=TimberbornPrioritizable(),
+        )
+
+        self.add_if_not_none(
+            LivingNaturalResource=LivingNaturalResource,
+            WateredObject=WateredObject
+        )
+
+        if YielderCuttable:
+            self["Yielder:Cuttable"] = YielderCuttable
+        self["Inventory:GoodStack"] = {"Storage": {"Goods": []}}
+        if GatherableYieldGrower:
+            if YielderGatherable:
+                self["GatherableYieldGrower"] = GatherableYieldGrower
+                self["Yielder:Gatherable"] = YielderGatherable
+            else:
+                logging.error("Components specified GatherableYieldGrower but not YielderGatherable,"
+                              " may result game crashing on map validation.")
+
+
+class TimberbornTreeComponents(TimberbornPlantComponennts):
+    load_args = TimberbornPlantComponennts.load_args + [('Yielder:Cuttable', TimberbornYielderCuttable)]
 
     def __init__(
         self,
@@ -324,30 +374,17 @@ class TimberbornTreeComponents(LoadMixin, dict):
         GatherableYieldGrower: Optional[TimberbornGatherableYieldGrower] = None,
         YielderGatherable: Optional[TimberbornYielderGatherable] = None,
     ):
-        dict.__init__(
-            self,
+        super().__init__(
             BlockObject=BlockObject,
-            BuilderJob={},
             CoordinatesOffseter=CoordinatesOffseter,
-            Demolishable={},
             Growable=Growable,
             NaturalResourceModelRandomizer=NaturalResourceModelRandomizer,
-            Prioritizable=TimberbornPrioritizable(),
-        )
-        self.add_if_not_none(
+            YielderCuttable=YielderCuttable,
             LivingNaturalResource=LivingNaturalResource,
-            WateredObject=WateredObject
+            WateredObject=WateredObject,
+            GatherableYieldGrower=GatherableYieldGrower,
+            YielderGatherable=YielderGatherable,
         )
-
-        self["Yielder:Cuttable"] = YielderCuttable
-        self["Inventory:GoodStack"] = {"Storage": {"Goods": []}}
-        if GatherableYieldGrower:
-            if YielderGatherable:
-                self["GatherableYieldGrower"] = GatherableYieldGrower
-                self["Yielder:Gatherable"] = YielderGatherable
-            else:
-                logging.error("Components specified GatherableYieldGrower but not YielderGatherable,"
-                              " may result game crashing on map validation.")
 
 
 class TimberbornTree(TimberbornEntity):
@@ -362,5 +399,40 @@ class TimberbornMap(dict):
         GameVersion: str,
         Singletons: TimberbornSingletons,
         Entities: List[TimberbornEntity],
+        TimeStamp: Optional[str] = None,
     ):
         dict.__init__(self, GameVersion=GameVersion, Singletons=Singletons, Entities=Entities)
+        if TimeStamp:
+            self['TimeStamp'] = TimeStamp
+
+    def write(self, output_path, config):
+
+        data = json.dumps(self["Singletons"]["TerrainMap"])
+
+        maphash = sha1(data.encode('utf-8')).hexdigest()
+        logging.debug(f"Terrain data hash: sha1 {maphash}")
+
+        try:
+            with open(output_path, "w") as f:
+                json.dump(self, f, indent=4)
+        except (OSError, PermissionError) as exc:
+            logging.error(
+                " ! Couldn't write to output path due to following error:"
+                "(Perhaps output path is incorrect or has permission denied)"
+            )
+            raise exc
+        else:
+            logging.debug(output_path)
+            timber_path = output_path.with_suffix(".timber")
+            arcname = "world.json"
+            logging.debug(f"Zipping '{arcname}'")
+            with ZipFile(timber_path, "w", compression=ZIP_DEFLATED, compresslevel=8) as timberzip:
+                timberzip.write(output_path, arcname=arcname)
+            if config.keep_json:
+                target = output_path.parent / f"{output_path.stem}-mapper{maphash[:8]}.json"
+                output_path.rename(target)
+                logging.debug(f"Unzipped file store as '{target}'")
+            else:
+                output_path.unlink()
+            print(f"\nSaved to '{timber_path}'\nYou can now open it in Timberborn map editor to add finishing touches.")
+        return timber_path

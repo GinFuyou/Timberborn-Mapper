@@ -27,6 +27,8 @@ class Goods(Enum):
     Log = "Log"
     MapleSyrup = "MapleSyrup"
     Chestnut = "Chestnut"
+    Dandelion = "Dandelion"
+    Berries = "Berries"
 
 
 class TreeSpecies(Enum):
@@ -34,6 +36,11 @@ class TreeSpecies(Enum):
     pine = ("Pine", {"logs": 2, "gth_good": Goods.PineResin, "gth_amount": 2})
     maple = ("Maple", {"logs": 8, "gth_good": Goods.MapleSyrup, "gth_amount": 3})
     chestnut = ("ChestnutTree", {"logs": 4, "gth_good": Goods.Chestnut, "gth_amount": 3})
+
+
+class PlantSpecies(Enum):
+    dandelion = ("Dandelion", {"gth_good": Goods.Dandelion, "gth_amount": 1})
+    blueberry = ("BlueberryBush", {"gth_good": Goods.Berries, "gth_amount": 3})
 
 
 @dataclass
@@ -125,8 +132,6 @@ def read_tree_map(heightmap: Heightmap, water_map: WaterMap, path: Path, spec: O
             species = TreeSpecies.chestnut
         else:
             species = TreeSpecies.maple
-
-        # species = TreeSpecies.birch  # WARNING DELETE ME when FIXED
 
         key = species.value[0]
         if key not in tree_counts.keys():

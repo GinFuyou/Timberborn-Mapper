@@ -1,6 +1,6 @@
 import logging
-from typing import Union, Optional  # Any, List, ,
 from enum import Enum
+from typing import Optional, Union  # Any, List, ,
 
 
 class Validator(dict):
@@ -21,8 +21,9 @@ class Validator(dict):
 
     def clean_attr(self, key: str):
         """ return value, was_fixed """
+        logging.warning(f"{key} in {self.keys()} ?")
         if key in self.keys():
-            logging.warning(f"Validator: name='{key}' is required but missing!")  # TODO TEST
+            logging.info(f"Validator: name='{key}' is required but missing!")
             sub = self.get(key)
             if sub.exception_class:
                 raise sub.exception_class(f"Validation failed for `{key}` - required and can't be fixed!")
@@ -31,14 +32,34 @@ class Validator(dict):
                 logging.debug(f"Will try to fix missing attribute with `{value}`")
                 return (value, True)
         else:
-            logging.debug(f" name='{key}' is optional, skip")  # TODO TEST
+            # logging.debug(f" name='{key}' is optional, skip")
             return (None, False)
 
 
-class TreeValidator(Validator):
+class PlantValidator(Validator):
     base_data = {
         "Growable": Validator({"GrowthProgress": 1.0}),
-        "BlockObject": Validator({"Coordinates": Validator(raises=True)}, raises=True),
+        "BlockObject": Validator({"Coordinates": Validator(raises=True)}, raises=True)
+    }
+
+    def __init__(self, data: dict = {},  raises: Union[bool, Exception] = False, species: Optional[Enum] = None):
+        super().__init__(data=data, raises=raises)
+        if species:
+            self.add_species_data(species.value[1])
+
+    def add_species_data(self, plant_args):
+        if plant_args.get("gth_good"):
+            self["Yielder:Gatherable"] = Validator({
+                "Yield": {
+                    "Good": {"Id": plant_args['gth_good'].value},
+                    "Amount": plant_args['gth_amount']
+                }
+            })
+            self['GatherableYieldGrower'] = Validator({"GrowthProgress": 0.5})
+
+
+class TreeValidator(PlantValidator):
+    base_data = PlantValidator.base_data | {
         "Yielder:Cuttable": Validator({
             "Good": {
               "Id": "Log"
@@ -47,16 +68,6 @@ class TreeValidator(Validator):
         }),
     }
 
-    def __init__(self, data: dict = {},  raises: Union[bool, Exception] = False, species: Optional[Enum] = None):
-        super().__init__(data=data, raises=raises)
-        if species:
-            tree_args = species.value[1]
-
-            self["Yielder:Cuttable"]["Amount"] = tree_args['logs']
-            if tree_args.get("gth_good"):
-                self["Yielder:Gatherable"] = {
-                    "Yield": {
-                        "Good": {"Id": tree_args['gth_good'].value},
-                        "Amount": tree_args['gth_amount']
-                    }
-                }
+    def add_species_data(self, plant_args):
+        super().add_species_data(plant_args)
+        self["Yielder:Cuttable"]["Amount"] = plant_args['logs']

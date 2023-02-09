@@ -35,7 +35,7 @@ else:
 # |_|  |_\__,_|_|_||_|
 # Main
 
-__version__ = "0.3.7-a-1"
+__version__ = "0.3.8-a-2.1"
 
 APPNAME = "TimberbornMapper"
 APP_AUTHOR = "MattMcMullan"
@@ -297,7 +297,7 @@ def read_json_input(config: Any) -> None:
         specfile_to_timberborn(data, config)
     elif is_game_map(data):
         logging.info(f"File looks like game map format, game version stated: {data.get('GameVersion', None)}")
-        read_game_map(data)
+        read_game_map(data, config, output_path=make_output_path(config))
     else:
         logging.error("Can't identify file by content!")
 

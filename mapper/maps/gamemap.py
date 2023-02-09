@@ -1,11 +1,11 @@
 import logging
+from datetime import datetime
 from enum import Enum
 
-from .format import (TimberbornEntity,  # TimberbornMap,TimberbornSingletons, trunc_float
-                     TimberbornMapSize, TimberbornSoilMoistureSimulator, TimberbornTerrainMap,
-                     TimberbornTreeComponents, TimberbornWaterMap)
-from .treemap import TreeSpecies  # Goods
-from .validation import TreeValidator  # , Validator
+from .format import (TimberbornEntity, TimberbornMap, TimberbornMapSize, TimberbornPlantComponennts, TimberbornSingletons,
+                     TimberbornSoilMoistureSimulator, TimberbornTerrainMap, TimberbornTreeComponents, TimberbornWaterMap)
+from .treemap import PlantSpecies, TreeSpecies  # Goods
+from .validation import PlantValidator, TreeValidator  # , Validator
 
 MAP_FORMAT_ELEMENTS = {"GameVersion": (str, int), "Singletons": dict, "Entities": list}
 SINGLETONS = {
@@ -18,6 +18,7 @@ SINGLETONS = {
 
 class Categories(Enum):
     tree = 'tree'
+    plant = 'plant'
     landscape = 'landscape'
 
 
@@ -25,8 +26,8 @@ class Categories(Enum):
 
 
 ENTITY_TEMPLATES = {
-    "Dandelion": {"validator": None, "category": None},
-    "BlueberryBush": {"validator": None, "category": None},
+    "Dandelion": {"validator": PlantValidator(species=PlantSpecies.dandelion), "category": Categories.plant},
+    "BlueberryBush": {"validator": PlantValidator(species=PlantSpecies.blueberry), "category": Categories.plant},
     "Birch": {"validator": TreeValidator(species=TreeSpecies.birch),
               "category": Categories.tree,
               "params": TreeSpecies.birch.value[1]},
@@ -70,7 +71,7 @@ def inc_dict_counter(dict_var, key, val=1):
         dict_var[key] = val
 
 
-def read_game_map(data):
+def read_game_map(data, config, output_path=None):
     singletons_data = data["Singletons"]
 
     loaded_singletons = {}
@@ -86,18 +87,27 @@ def read_game_map(data):
         else:
             pass
 
-    import pprint
-    logging.debug("Loaded singletons: ")
+    loaded_singletons = TimberbornSingletons(**loaded_singletons)
+
+    # import pprint
+    # logging.debug("Loaded singletons: ")
     # pprint.pprint(loaded_singletons)
 
     entity_data = data['Entities']
     loaded_entities = []
     unknown_entity_templates = []
+    ignored_entity_templates = set()
     remove_templates = []
     removed_entity_counts = {}
     entity_counts = {}
+    initial_entity_count = len(entity_data)
+    counter = 0
 
     for entity_dict in entity_data:
+        counter += 1
+        if counter % 100 == 0:
+            logging.info(f" Processing Entities: {counter: >3}/{initial_entity_count}")
+
         entity = TimberbornEntity.load(entity_dict)
 
         inc_dict_counter(entity_counts, entity.template)
@@ -106,9 +116,12 @@ def read_game_map(data):
             inc_dict_counter(removed_entity_counts, entity.template)
             continue
 
+        if entity.template in ignored_entity_templates:
+            continue
+
         if entity.template in ENTITY_TEMPLATES.keys():
             template = ENTITY_TEMPLATES[entity.template]
-            logging.debug(f"Entity '{entity.template}' is known")
+            logging.debug(f" *** Entity #{counter} '{entity.template}' is known")
             # handler = template.get('handle')
         else:
             template = None
@@ -119,26 +132,54 @@ def read_game_map(data):
             if answer in ('y', '1'):
                 remove_templates.append(entity.template)
                 continue
+            else:
+                ignored_entity_templates.add(entity.template)
 
         entity['Components'] = entity_dict['Components']
         if template:
-            if template['category'] == Categories.tree:
-                entity['Components'] = TimberbornTreeComponents.load(
-                    entity_dict['Components'], _validator=template['validator']
-                )
+            try:
+                if template['category'] == Categories.tree:
+                    entity['Components'] = TimberbornTreeComponents.load(
+                        entity_dict['Components'], _validator=template['validator']
+                    )
+                elif template['category'] == Categories.plant:
+                    entity['Components'] = TimberbornPlantComponennts.load(
+                        entity_dict['Components'], _validator=template['validator']
+                    )
+
+            except Exception as ex:
+                logging.error(f"Couldn't load Components for template '{entity.template}': {entity_dict['Components']}")
+                raise ex
 
         loaded_entities.append(entity)
 
-    logging.debug("Loaded Entities: ")
-    pprint.pprint(loaded_entities)
+    updated_game_version = config.game_version
+    updated_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # logging.debug("Loaded Entities: ")
+    # pprint.pprint(loaded_entities)
     if unknown_entity_templates:
         logging.warning(
             f"Found {len(unknown_entity_templates)} unknown entity templates: {', '.join(unknown_entity_templates)}"
         )
     else:
         logging.info("No unknown entities found")
-    logging.info("Processed entities")
-    pprint.pprint(entity_counts)
+
+    if entity_counts:
+        logging.info("Processed entities")
+        for key, val in entity_counts.items():
+            logging.info(f"{key: >18}: {val: >6}")
+    else:
+        logging.info("No entities in the file")
 
     if remove_templates:
         logging.info(f"Removed entities with templates: {', '.join(remove_templates)}")
+
+    timber_map = TimberbornMap(
+        updated_game_version,
+        loaded_singletons,
+        loaded_entities,
+        updated_timestamp
+    )
+    if output_path:
+        timber_map.write(output_path, config)
