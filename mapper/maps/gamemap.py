@@ -2,10 +2,12 @@ import logging
 from datetime import datetime
 from enum import Enum
 
-from .format import (TimberbornEntity, TimberbornMap, TimberbornMapSize, TimberbornPlantComponennts, TimberbornSingletons,
-                     TimberbornSoilMoistureSimulator, TimberbornTerrainMap, TimberbornTreeComponents, TimberbornWaterMap)
+from .format import (TimberbornEntity, TimberbornMap, TimberbornMapSize, TimberbornPlantComponents, TimberbornRuinComponents,
+                     TimberbornSingletons, TimberbornSoilMoistureSimulator, TimberbornTerrainMap,
+                     TimberbornTreeComponents, TimberbornWaterMap, TimberbornWaterSourceComponents)
+# TimberbornSimpleComponents
 from .treemap import PlantSpecies, TreeSpecies  # Goods
-from .validation import PlantValidator, TreeValidator  # , Validator
+from .validation import BlockValidator, OrientableValidator, PlantValidator, RuinValidator, TreeValidator, WaterSourceValidator
 
 MAP_FORMAT_ELEMENTS = {"GameVersion": (str, int), "Singletons": dict, "Entities": list}
 SINGLETONS = {
@@ -20,10 +22,11 @@ class Categories(Enum):
     tree = 'tree'
     plant = 'plant'
     landscape = 'landscape'
+    features = 'features'
+    ruins = 'ruins'
 
 
 # All Components attributes are optional unless handler states required
-
 
 ENTITY_TEMPLATES = {
     "Dandelion": {"validator": PlantValidator(species=PlantSpecies.dandelion), "category": Categories.plant},
@@ -41,8 +44,15 @@ ENTITY_TEMPLATES = {
     "ChestnutTree": {"validator": TreeValidator(species=TreeSpecies.chestnut),
                      "category": Categories.tree,
                      "params": TreeSpecies.chestnut.value[1]},
-    "WaterSource": {"validator": None, "category": Categories.landscape},  # TODO user right handler
+    "WaterSource": {"validator": WaterSourceValidator(), "category": Categories.landscape},
+    "Barrier": {"validator": BlockValidator(), "category": Categories.landscape},
+    "Slope":  {"validator": OrientableValidator(), "category": Categories.landscape},
+    "UndergroundRuins": {"validator": OrientableValidator(), "category": Categories.features},  # TODO
+    "StartingLocation": {"validator": OrientableValidator(), "category": Categories.features},  # TODO
 }
+ENTITY_TEMPLATES.update(
+    {f"RuinColumnH{i}": {"validator": RuinValidator(), "category": Categories.ruins} for i in range(1, 9)}
+)
 
 
 def is_game_map(data):
@@ -121,11 +131,9 @@ def read_game_map(data, config, output_path=None):
 
         if entity.template in ENTITY_TEMPLATES.keys():
             template = ENTITY_TEMPLATES[entity.template]
-            logging.debug(f" *** Entity #{counter} '{entity.template}' is known")
-            # handler = template.get('handle')
+            # logging.debug(f" *** Entity #{counter} '{entity.template}' is known")
         else:
             template = None
-            # handler = AttributeHandler()
             unknown_entity_templates.append(entity.template)
             logging.warning(f"Entity '{entity.template}' is unknown!")
             answer = input("Remove entities with this template from the map? (Y/n 1/0)\n").strip().lower()
@@ -137,15 +145,26 @@ def read_game_map(data, config, output_path=None):
 
         entity['Components'] = entity_dict['Components']
         if template:
+            category = template['category']
             try:
-                if template['category'] == Categories.tree:
+                if category == Categories.tree:
                     entity['Components'] = TimberbornTreeComponents.load(
                         entity_dict['Components'], _validator=template['validator']
                     )
-                elif template['category'] == Categories.plant:
-                    entity['Components'] = TimberbornPlantComponennts.load(
+                elif category == Categories.plant:
+                    entity['Components'] = TimberbornPlantComponents.load(
                         entity_dict['Components'], _validator=template['validator']
                     )
+                elif category == Categories.ruins:
+                    entity['Components'] = TimberbornRuinComponents.load(
+                        entity_dict['Components'], _validator=template['validator']
+                    )
+                elif entity.template == "WaterSource":
+                    entity['Components'] = TimberbornWaterSourceComponents.load(
+                        entity_dict['Components'], _validator=template['validator']
+                    )
+                else:
+                    logging.warning(f"Template '{template}' is not handled by validation")
 
             except Exception as ex:
                 logging.error(f"Couldn't load Components for template '{entity.template}': {entity_dict['Components']}")
@@ -182,4 +201,5 @@ def read_game_map(data, config, output_path=None):
         updated_timestamp
     )
     if output_path:
-        timber_map.write(output_path, config)
+        timber_path = timber_map.write(output_path, config)
+        print(f"\nSaved to '{timber_path}'\nIt's HIGHLY recommended you open map in in-game editor and re-save it.")

@@ -30,7 +30,7 @@ class LoadMixin():
     def load(Cls, data: dict, _validator=Validator(), raise_error=True):
         validator = _validator
 
-        # logging.debug(f"{Cls.__name__}.load(): data=`{data}` validator=`{validator.__class__.__name__}` {validator}")
+        # logging.debug(f"{Cls.__name__}.load(): data=`{data}` validator=`{validator.__class__.__name__}` {validator}") TEST
         kwargs = {}
         errors = []
         for name, coerce_callable in Cls.load_args:
@@ -70,9 +70,9 @@ class LoadMixin():
                 arg = coerce_callable(value)
             name = name.replace(':', '')
             kwargs[name] = arg
-            # logging.debug(f" kwarg '{name}': {arg}")
+            # logging.debug(f" kwarg '{name}': {arg}") TEST
 
-        logging.debug(f"kwargs: {kwargs}")
+        # logging.debug(f"kwargs: {kwargs}") TEST
         if errors:
             logging.error("Validation failed, errors: ")
             for error in errors:
@@ -213,7 +213,6 @@ class TimberbornBlockObject(LoadMixin, dict):
 
     @classmethod
     def load(Cls, data: dict, _validator=Validator(), raise_error=True):
-        print(data)
         return super().load(data, _validator)
 
 
@@ -238,9 +237,6 @@ class TimberbornCoordinatesOffseter(dict):
     @classmethod
     def random(cls) -> "TimberbornCoordinatesOffseter":
         return cls(TimberbornCoordinatesOffset(pyrandom() * 0.25, pyrandom() * 0.25))
-
-    # @classmethod
-    # def load(Cls, data: dict):
 
 
 class TimberbornNaturalResourceModelRandomizer(dict):
@@ -293,6 +289,33 @@ class TimberbornYielderGatherable(TimberbornYielderCuttable):
     pass
 
 
+class TimberbornYielderRuin(TimberbornYielderCuttable):
+    pass
+
+
+class TimberbornWaterSource(LoadMixin, dict):
+    # TODO add specific objects to desctibe and validate strength
+    load_args = [("SpecifiedStrength", float), ("CurrentStrength", float)]
+
+    def __init__(self, SpecifiedStrength: float, CurrentStrength: float = 1.0):
+        dict.__init__(self, SpecifiedStrength=SpecifiedStrength, CurrentStrength=CurrentStrength)
+
+
+class TimberbornRuinModels(LoadMixin, dict):
+    # TODO add specific objects to desctibe and validate VariantId
+    load_args = [("VariantId", str)]
+
+    def __init__(self, VariantId: str):
+        dict.__init__(self, VariantId=VariantId)
+
+
+class TimberbornDryObject(LoadMixin, dict):
+    load_args = [("IsDry", bool)]
+
+    def __init__(self, IsDry: bool):
+        dict.__init__(self, IsDry=IsDry)
+
+
 class TimberbornWateredObject(dict):
     def __init__(self, IsDry: bool):
         dict.__init__(self, IsDry=IsDry)
@@ -308,7 +331,39 @@ class TimberbornPrioritizable(dict):
         dict.__init__(self, Priority={"Value": Priority})
 
 
-class TimberbornPlantComponennts(LoadMixin, dict):
+class TimberbornSimpleComponents(LoadMixin, dict):
+    load_args = [('BlockObject', TimberbornBlockObject)]
+
+    def __init__(self, BlockObject: TimberbornBlockObject):
+        dict.__init__(self, BlockObject=BlockObject)
+
+
+class TimberbornWaterSourceComponents(TimberbornSimpleComponents):
+    load_args = [('BlockObject', TimberbornBlockObject),
+                 ('WaterSource', TimberbornWaterSource)]
+
+    def __init__(self, BlockObject: TimberbornBlockObject, WaterSource: TimberbornWaterSource):
+        dict.__init__(self, BlockObject=BlockObject, WaterSource=WaterSource)
+
+
+class TimberbornRuinComponents(TimberbornSimpleComponents):
+    load_args = [('BlockObject', TimberbornBlockObject),
+                 ('Yielder:Ruin', TimberbornYielderRuin),
+                 ('DryObject', TimberbornDryObject),
+                 ('RuinModels', TimberbornRuinModels)]
+
+    def __init__(self,
+                 BlockObject: TimberbornBlockObject,
+                 RuinModels: TimberbornRuinModels,
+                 YielderRuin: TimberbornYielderRuin,
+                 DryObject: Optional[TimberbornDryObject] = None):
+
+        dict.__init__(self, BlockObject=BlockObject, RuinModels=RuinModels)
+        self.add_if_not_none(DryObject=DryObject)
+        self["Yielder:Ruin"] = YielderRuin
+
+
+class TimberbornPlantComponents(TimberbornSimpleComponents):
     load_args = [('BlockObject', TimberbornBlockObject),
                  ('CoordinatesOffseter', TimberbornCoordinatesOffseter),
                  ('Growable', TimberbornGrowable),
@@ -317,6 +372,9 @@ class TimberbornPlantComponennts(LoadMixin, dict):
                  ('WateredObject', TimberbornWateredObject),
                  ('GatherableYieldGrower', TimberbornGatherableYieldGrower),
                  ('Yielder:Gatherable', TimberbornYielderGatherable)]
+
+    def is_dead(self):
+        return self.get('LivingNaturalResource', {}).get('IsDead', False)
 
     def __init__(
         self,
@@ -354,13 +412,15 @@ class TimberbornPlantComponennts(LoadMixin, dict):
             if YielderGatherable:
                 self["GatherableYieldGrower"] = GatherableYieldGrower
                 self["Yielder:Gatherable"] = YielderGatherable
+                if self.is_dead():
+                    self["Yielder:Gatherable"]["Yield"]["Amount"] = 0
             else:
                 logging.error("Components specified GatherableYieldGrower but not YielderGatherable,"
                               " may result game crashing on map validation.")
 
 
-class TimberbornTreeComponents(TimberbornPlantComponennts):
-    load_args = TimberbornPlantComponennts.load_args + [('Yielder:Cuttable', TimberbornYielderCuttable)]
+class TimberbornTreeComponents(TimberbornPlantComponents):
+    load_args = TimberbornPlantComponents.load_args + [('Yielder:Cuttable', TimberbornYielderCuttable)]
 
     def __init__(
         self,
@@ -434,5 +494,4 @@ class TimberbornMap(dict):
                 logging.debug(f"Unzipped file store as '{target}'")
             else:
                 output_path.unlink()
-            print(f"\nSaved to '{timber_path}'\nYou can now open it in Timberborn map editor to add finishing touches.")
         return timber_path

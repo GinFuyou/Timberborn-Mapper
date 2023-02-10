@@ -6,13 +6,11 @@ import re
 import sys
 from dataclasses import dataclass
 from enum import Enum
-from hashlib import sha1
 from pathlib import Path
 from platform import python_version
 # from subprocess import run
 from time import time
 from typing import Any, Optional, Union
-from zipfile import ZIP_DEFLATED, ZipFile
 
 import colorama
 from appdirs import AppDirs
@@ -35,7 +33,7 @@ else:
 # |_|  |_\__,_|_|_||_|
 # Main
 
-__version__ = "0.3.8-a-2.1"
+__version__ = "0.3.8-a-4"
 
 APPNAME = "TimberbornMapper"
 APP_AUTHOR = "MattMcMullan"
@@ -56,6 +54,14 @@ max_elevation_default = -1
 max_elevation_limit = 64
 game_version = ""
 """
+
+CONTACTS = {
+    "Gin Fuyou": {
+        "updated": "Feb. 2023",
+        "Timberborn official Discord": "https://discord.gg/csbUhFuw",
+        "Github": "https://github.com/GinFuyou/Timberborn-Mapper",
+    }
+}
 
 
 class MapperConfig(argparse.Namespace):
@@ -136,6 +142,7 @@ class GameDefs(Enum):
 
 R = colorama.Style.RESET_ALL
 H1 = colorama.Fore.BLUE
+W1 = colorama.Fore.RED
 # H2 = colorama.Fore.GREEN
 BOLD = colorama.Style.BRIGHT
 CODE = colorama.Back.WHITE + colorama.Fore.BLACK
@@ -178,11 +185,12 @@ class ImageToTimberbornSpec:
 
 
 def image_to_timberborn(spec: ImageToTimberbornSpec, path: Path, output_path: Path, args: Any) -> Path:
+    config = args
 
     logging.info(f"Output dir: `{output_path.parent}`")
 
     t = -time()
-    heightmap = read_heightmap(width=spec.width, height=spec.height, spec=spec.heightmap, path=path, args=args)
+    heightmap = read_heightmap(width=spec.width, height=spec.height, spec=spec.heightmap, path=path, args=config)
     logging.info(f"Finished in {t + time():.2f} sec.")
 
     t = -time()
@@ -202,8 +210,9 @@ def image_to_timberborn(spec: ImageToTimberbornSpec, path: Path, output_path: Pa
         TerrainMap=heightmap.terrain_map,
         WaterMap=water_map.water_map,
     )
-    timber_map = TimberbornMap(args.game_version, singletons, tree_map.entities)
+    timber_map = TimberbornMap(config.game_version, singletons, tree_map.entities)
 
+    """
     data = json.dumps(heightmap.terrain_map)
     maphash = sha1(data.encode('utf-8')).hexdigest()
     logging.debug(f"Terrain data hash: sha1 {maphash}")
@@ -232,6 +241,9 @@ def image_to_timberborn(spec: ImageToTimberbornSpec, path: Path, output_path: Pa
         else:
             output_path.unlink()
         print(f"\nSaved to '{timber_path}'\nYou can now open it in Timberborn map editor to add finishing touches.")
+    """
+    timber_path = timber_map.write(output_path, config)
+    print(f"\nSaved to '{timber_path}'\nYou can now open it in Timberborn map editor to add finishing touches.")
     return timber_path
 
 
@@ -297,7 +309,24 @@ def read_json_input(config: Any) -> None:
         specfile_to_timberborn(data, config)
     elif is_game_map(data):
         logging.info(f"File looks like game map format, game version stated: {data.get('GameVersion', None)}")
-        read_game_map(data, config, output_path=make_output_path(config))
+        if config.non_interactive:
+            # TODO guess action by GameVersion, force action by config args
+            logging.info("Non-interactive mode: assume map upgrade")
+            read_game_map(data, config, output_path=make_output_path(config))
+        else:
+            print("Select available action. (type number and press Enter)")
+            print(f"{BOLD}1{R}. {BOLD}[BETA]{R} upgrade map to version ~ '{config.game_version} and pack as '.timber'\n"
+                  f"\t{BOLD}{W1}warning{R}: this is an experimental feature, there is no gurantee it will work,\n"
+                  "\tit also might remove objects from the map.\n"
+                  f"\t{BOLD}note{R}: this may output a huge wall of text depending on log level")
+            print(f"{BOLD}0{R}. Abort and exit")
+            answer = ""
+            while answer not in ("0", "1", "q"):
+                answer = input("> ").strip().lower()
+            if answer == "1":
+                read_game_map(data, config, output_path=make_output_path(config))
+            else:
+                sys.exit("User abort")
     else:
         logging.error("Can't identify file by content!")
 
@@ -519,11 +548,23 @@ def main() -> None:
             logging.info("File will be verified and processed like an image")
             manual_image_to_timberborn(config)
     except Exception as exc:
-        logging.critical("Exception happened!")
+        logging.critical(f"{W1}{BOLD}Exception happened!{R}")
+        contact_msg = "Please, contact developers abput the problem and include traceback:\n"
+        for dev, contacts in CONTACTS.items():
+            contact_msg += f"{BOLD}{dev}{R}:\n"
+            for title, value in contacts.items():
+                if title.lower() == 'updated':
+                    contact_msg += f"\t(updated on {value})\n"
+                else:
+                    contact_msg += f"\t{BOLD}{title}{R}: {value}\n"
+
         if not config.non_interactive:
             logging.critical("Following error happened during execution:")
             logging.critical(exc)
+            print(contact_msg)
             input('(Press enter to throw traceback and exit. Run from console to see details if window closes)')
+        else:
+            print(contact_msg)
         raise exc
 
     t += time()

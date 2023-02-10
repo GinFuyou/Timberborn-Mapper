@@ -6,7 +6,7 @@ from typing import Optional, Union  # Any, List, ,
 class Validator(dict):
     base_data = {}
 
-    def __init__(self, data: dict = {}, raises: Union[bool, Exception] = False):
+    def __init__(self, data: dict = {}, raises: Union[bool, Exception] = False, error_msg: Optional[str] = ''):
         super().__init__(**self.base_data)
         if data:
             self.update(data)
@@ -21,7 +21,7 @@ class Validator(dict):
 
     def clean_attr(self, key: str):
         """ return value, was_fixed """
-        logging.warning(f"{key} in {self.keys()} ?")
+        # logging.warning(f"{key} in {self.keys()} ?")  # TEST
         if key in self.keys():
             logging.info(f"Validator: name='{key}' is required but missing!")
             sub = self.get(key)
@@ -29,11 +29,31 @@ class Validator(dict):
                 raise sub.exception_class(f"Validation failed for `{key}` - required and can't be fixed!")
             else:
                 value = dict(self[key])
-                logging.debug(f"Will try to fix missing attribute with `{value}`")
+                logging.debug(f"Will try to fix missing attribute '{key}' with `{value}` (END)")
                 return (value, True)
         else:
             # logging.debug(f" name='{key}' is optional, skip")
             return (None, False)
+
+
+class BlockValidator(Validator):
+    base_data = {
+        "BlockObject": Validator({"Coordinates": Validator(raises=True)}, raises=True)
+    }
+
+
+class OrientableValidator(BlockValidator):
+    base_data = BlockValidator.base_data | {"Orientation": Validator({"Value": "Cw0"})}
+
+
+class RuinValidator(BlockValidator):
+    base_data = BlockValidator.base_data | {"RuinModels": Validator({"VariantId": "A"})}
+
+
+class WaterSourceValidator(BlockValidator):
+    base_data = BlockValidator.base_data | {
+        "WaterSource": {"SpecifiedStrength": 1.0, "CurrentStrength": 1.0}
+    }
 
 
 class PlantValidator(Validator):
