@@ -4,7 +4,21 @@ A tool for turning height maps into Timberborn maps.
 ![](https://raw.githubusercontent.com/GinFuyou/Timberborn-Mapper/gins_refactor/assets/TimberbornMapper-680.jpeg)
 > Screen cap is taken using QuadrupleTerrainHeight mod using 48 layers, vanilla game supports less.
 
+# About
+
+## What it does
+1. Converts grayscale images into game map file with terrain.
+2. Adds trees and water from *additional* grayscale images.
+3. BETA: upgrades old `.json` maps to be loadable.
+
+## What it does NOT:
+1. Does not create maps fully ready to play: you need to add water sources and starting location in editor.
+2. Does not upgrade `.timber` maps.
+3. Does not export game maps into grayscale height maps. *(planned)*
+
 # Setup
+
+## Base install as python script
 1. Install python. You can find it [here](https://www.python.org/downloads/).
 2. Install pillow. You can read their instructions [here](https://pillow.readthedocs.io/en/stable/installation.html), or just open your command prompt and run "python -m pip install pillow".
 3. Click the green "Code" button in github for directions to download this code.
@@ -26,21 +40,28 @@ Currently project requires python 3.10 or 3.11 but may work on other versions.
 
 # Usage
 
-**Note**: at the moment tree map will generate only birches, other trees need fixing yield attributes.
 
+## Height map import
 - script expects a grayscale image as height map (most likely a PNG but some other formats should also work)
 - check help for available options, like setting map size, output file name and script behaviour modifiers
 
-## Script version
+### Script version
 - Open the command prompt and cd to the directory with the code.
 - Run `python mapper --help` to see instructions on how to use it.
 
-## Binary version (Windows)
+### Binary version (Windows)
 - Open command promt (or powershell) and `cd` ("change directory" command) to the folder with executable.
 - Run `TimberbornMapper.exe --help` to see instructions on how to use it.
 
-You can also just drag-n-drop height map image or spec file onto executable's icon or it's links. But can't set options directly this way.
+You can also just **drag-n-drop** height map image or spec file onto executable's icon or it's links. But can't set options directly this way.
 It will output **.timber** file into same place where input file was taken.
+
+## [BETA] Old map format upgrade
+If you input (manually or by drag'n'drop) a `.json` file of a old format game map, script will try to detect it's a map and will suggest to upgrade it,
+fixing attributes that crash current game version (should apply to maps created in 2021, when chestnuts and maple syrup were not yet added) and then packing it as
+`.timber` file.
+
+Feature is not yet extensively tested and still need work, but it should make maps loadable.
 
 ## Configuration files
 
