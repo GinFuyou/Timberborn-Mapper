@@ -2,14 +2,17 @@ import logging
 from datetime import datetime
 from enum import Enum
 
+from image_utils import build_image
+
 from .format import (TimberbornEntity, TimberbornMap, TimberbornMapSize, TimberbornPlantComponents, TimberbornRuinComponents,
-                     TimberbornSingletons, TimberbornSoilMoistureSimulator, TimberbornTerrainMap,
-                     TimberbornTreeComponents, TimberbornWaterMap, TimberbornWaterSourceComponents)
+                     TimberbornSingletons, TimberbornSoilMoistureSimulator, TimberbornTerrainMap, TimberbornTreeComponents,
+                     TimberbornWaterMap, TimberbornWaterSourceComponents)
 # TimberbornSimpleComponents
 from .treemap import PlantSpecies, TreeSpecies  # Goods
 from .validation import BlockValidator, OrientableValidator, PlantValidator, RuinValidator, TreeValidator, WaterSourceValidator
 
 MAP_FORMAT_ELEMENTS = {"GameVersion": (str, int), "Singletons": dict, "Entities": list}
+SAVE_FORMAT_ELEMENTS = {"WeatherDurationService": dict, "WeatherService": dict, "FactionService": dict}
 SINGLETONS = {
     "MapSize": {"type": dict, "mandatory": True, "class": TimberbornMapSize},
     "TerrainMap": {"type": dict, "mandatory": True, "class": TimberbornTerrainMap},
@@ -74,6 +77,11 @@ def is_game_map(data):
     return all(flags)
 
 
+def is_game_save(data):
+    flags = [key in data.keys() for key in SAVE_FORMAT_ELEMENTS.keys()]
+    return any(flags) and is_game_map(data)
+
+
 def inc_dict_counter(dict_var, key, val=1):
     if key in dict_var.keys():
         dict_var[key] += val
@@ -81,9 +89,7 @@ def inc_dict_counter(dict_var, key, val=1):
         dict_var[key] = val
 
 
-def read_game_map(data, config, output_path=None):
-    singletons_data = data["Singletons"]
-
+def load_singletons(singletons_data) -> TimberbornSingletons:
     loaded_singletons = {}
     for key, spec in SINGLETONS.items():
         if key in singletons_data.keys():
@@ -97,7 +103,29 @@ def read_game_map(data, config, output_path=None):
         else:
             pass
 
-    loaded_singletons = TimberbornSingletons(**loaded_singletons)
+    return TimberbornSingletons(**loaded_singletons)
+
+
+def read_terrain(data, config, output_path=None):
+    loaded_singletons = load_singletons(data["Singletons"])
+    terrain_map = loaded_singletons['TerrainMap']
+    map_size = loaded_singletons['MapSize']['Size'].value
+    heights_array = terrain_map['Heights'].array_list
+    logging.debug(f"Map size: {map_size}")
+
+    image = build_image(heights_array, map_size)
+
+    if output_path:
+        output_path = output_path.with_suffix('.png')
+        image.save(output_path, "PNG")
+        logging.info(f"Exported terrain map as '{output_path}'")
+    else:
+        image.show()
+
+
+def read_game_map(data, config, output_path=None):
+
+    loaded_singletons = load_singletons(data["Singletons"])
 
     # import pprint
     # logging.debug("Loaded singletons: ")
@@ -164,7 +192,7 @@ def read_game_map(data, config, output_path=None):
                         entity_dict['Components'], _validator=template['validator']
                     )
                 else:
-                    logging.warning(f"Template '{template}' is not handled by validation")
+                    logging.warning(f"Template '{entity.template}' is not handled by validation")
 
             except Exception as ex:
                 logging.error(f"Couldn't load Components for template '{entity.template}': {entity_dict['Components']}")
@@ -198,7 +226,8 @@ def read_game_map(data, config, output_path=None):
         updated_game_version,
         loaded_singletons,
         loaded_entities,
-        updated_timestamp
+        updated_timestamp,
+        MapperVersion=config._mapper_version,
     )
     if output_path:
         timber_path = timber_map.write(output_path, config)

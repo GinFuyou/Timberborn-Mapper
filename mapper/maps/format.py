@@ -14,6 +14,8 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from .validation import Validator
 
+INTERNAL_ARC_NAME = "world.json"
+
 
 def trunc_float(value: Union[int, float, str], prec=6):
     return round(float(value), prec)
@@ -87,7 +89,9 @@ class LoadMixin():
 
 
 class TimberbornSize(dict):
+
     def __init__(self, X: int, Y: int):
+        self.value = (X, Y)
         dict.__init__(self, X=X, Y=Y)
 
 
@@ -97,6 +101,7 @@ class TimberbornArray(dict):
 
     def __init__(self, Array: List[object]):
 
+        self.array_list = Array
         array_str = self.delimeter.join([str(x) for x in Array])
         dict.__init__(self, Array=array_str)
 
@@ -460,10 +465,13 @@ class TimberbornMap(dict):
         Singletons: TimberbornSingletons,
         Entities: List[TimberbornEntity],
         TimeStamp: Optional[str] = None,
+        MapperVersion: Optional[str] = None,
     ):
         dict.__init__(self, GameVersion=GameVersion, Singletons=Singletons, Entities=Entities)
         if TimeStamp:
             self['TimeStamp'] = TimeStamp
+        if MapperVersion:
+            self['MapperVersion'] = MapperVersion
 
     def write(self, output_path, config):
 
@@ -484,7 +492,7 @@ class TimberbornMap(dict):
         else:
             logging.debug(output_path)
             timber_path = output_path.with_suffix(".timber")
-            arcname = "world.json"
+            arcname = INTERNAL_ARC_NAME
             logging.debug(f"Zipping '{arcname}'")
             with ZipFile(timber_path, "w", compression=ZIP_DEFLATED, compresslevel=8) as timberzip:
                 timberzip.write(output_path, arcname=arcname)

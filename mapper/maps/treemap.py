@@ -113,7 +113,6 @@ def read_tree_map(heightmap: Heightmap, water_map: WaterMap, path: Path, spec: O
     map_image = MapImage(filepath, heightmap.width, heightmap.height)
     image = map_image.image
 
-    logging.warning("!! Will generate only birches until Yeilds are fixed!")
     trees = []
     for i, pixel in enumerate(map_image.normalized_data):
         if pixel < spec.treeline_cutoff:

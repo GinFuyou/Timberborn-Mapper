@@ -5,20 +5,21 @@ import logging
 import re
 import sys
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 from platform import python_version
 # from subprocess import run
 from time import time
 from typing import Any, Optional, Union
+from zipfile import ZipFile
 
 import colorama
 from appdirs import AppDirs
-from maps.format import TimberbornMap, TimberbornSingletons
+from base import CONFIG_FILE, CONTACTS, DEFAULT_TOML, ActionHandler, GameDefs, GameVer, MapperConfig
+from maps.format import INTERNAL_ARC_NAME, TimberbornMap, TimberbornSingletons
+from maps.gamemap import is_game_map, is_game_save, read_game_map, read_terrain
 from maps.heightmap import ImageToTimberbornHeightmapLinearConversionSpec, ImageToTimberbornHeightmapSpec, read_heightmap
 from maps.treemap import ImageToTimberbornTreemapSpec, read_tree_map
 from maps.watermap import read_water_map
-from maps.gamemap import is_game_map, read_game_map
 
 try:
     import tomllib
@@ -33,111 +34,11 @@ else:
 # |_|  |_\__,_|_|_||_|
 # Main
 
-__version__ = "0.3.8-a-4"
+__version__ = "0.3.9-a-2"
 
 APPNAME = "TimberbornMapper"
+# Original script creator
 APP_AUTHOR = "MattMcMullan"
-CONFIG_FILE = "mapperconf.toml"
-
-# This is a config template, not source of config defaults. Use MapperConfig __init__ instead
-DEFAULT_TOML = """[main]
-config_version = 1
-nocolor = false
-non_interactive = false
-keep_json = false
-maps_dir = ""
-
-[map]
-max_map_size_defualt = -1
-max_map_size_limit = 512
-max_elevation_default = -1
-max_elevation_limit = 64
-game_version = ""
-"""
-
-CONTACTS = {
-    "Gin Fuyou": {
-        "updated": "Feb. 2023",
-        "Timberborn official Discord": "https://discord.gg/csbUhFuw",
-        "Github": "https://github.com/GinFuyou/Timberborn-Mapper",
-    }
-}
-
-
-class MapperConfig(argparse.Namespace):
-    _os_dict = {
-        "windows": "w",
-        "unknown": "w",  # not like we have many valid options
-        "macos": "m",
-        "linux": "w"     # change if game supports Linux _natively_
-    }
-
-    def __init__(self, skip_values=["", "DEFAULT"], **kwargs):
-        self._skip_values = skip_values
-
-        self.maps_dir = ""
-        self.max_map_size_defualt = 256
-        self.max_map_size_limit = 512
-        self.max_elevation_default = 16
-        self.max_elevation_limit = 64
-        self.nocolor = False
-        self.non_interactive = False
-        self.keep_json = False
-
-        self._os_key = self.get_os()
-        self._os_letter = self._os_dict[self._os_key]
-        self.game_version = f"0.3.5.1-fb48f47-s{self._os_letter}"
-
-        self._safe_extend(skip_values, **kwargs)
-
-    def get_os(self):
-        key = "unknown"
-        if sys.platform.startswith("linux"):
-            key = "linux"
-        elif sys.platform.startswith("win") or sys.platform.startswith("cygwin"):
-            key = "windows"
-        elif sys.platform.startswith("darwin"):
-            key = "macos"
-        return key
-
-    def guess_game_dir(self, user=""):
-        path = None
-        if self._os_key in ("windows", "macos", "linux"):
-            path = Path(f"~{user}/Documents/Timberborn/")
-        if path:
-            path = path.expanduser()
-            logging.debug(f"Game Dir: '{path}'")
-            if path.is_dir():
-                return path
-        return None
-
-    def _safe_extend(self, skip_values, **kwargs):
-        for key, val in kwargs.items():
-            if (val not in skip_values) and (key[0] != "_"):
-                setattr(self, key, val)
-
-    """
-    def load_defaults(self, **kwargs):
-         for key, val in kwargs.items():
-            if (key[0] != "_") and not hasattr(self, key):
-                setattr(self, key, val)
-    """
-
-    def update_extend(self, **kwargs):
-        """extend self attributes overriding existing if value is not in skip_values"""
-        if "_skip_values" in kwargs:
-            skip_values = kwargs.pop("_skip_values")
-        else:
-            skip_values = self._skip_values
-
-        self._safe_extend(skip_values, **kwargs)
-
-
-class GameDefs(Enum):
-    """ Game default values and properties """
-    MAP_SUFFIX = ".timber"
-    MAX_ELEVATION = 16
-    MAX_MAP_SIZE = 256
 
 
 R = colorama.Style.RESET_ALL
@@ -210,48 +111,17 @@ def image_to_timberborn(spec: ImageToTimberbornSpec, path: Path, output_path: Pa
         TerrainMap=heightmap.terrain_map,
         WaterMap=water_map.water_map,
     )
-    timber_map = TimberbornMap(config.game_version, singletons, tree_map.entities)
-
-    """
-    data = json.dumps(heightmap.terrain_map)
-    maphash = sha1(data.encode('utf-8')).hexdigest()
-    logging.debug(f"Terrain data hash: sha1 {maphash}")
-
-    try:
-        with open(output_path, "w") as f:
-            json.dump(timber_map, f, indent=4)
-    except (OSError, PermissionError) as exc:
-        logging.error(
-            " ! Couldn't write to output path due to following error:"
-            "(Perhaps output path is incorrect or has permission denied)"
-        )
-        raise exc
-    else:
-        logging.debug(output_path)
-        timber_path = output_path.with_suffix(".timber")
-        # arcname = output_path.with_suffix(".json").name
-        arcname = "world.json"
-        print(f"Zipping '{arcname}'")
-        with ZipFile(timber_path, "w", compression=ZIP_DEFLATED, compresslevel=8) as timberzip:
-            timberzip.write(output_path, arcname=arcname)
-        if args.keep_json:
-            target = output_path.parent / f"{output_path.stem}-mapper{maphash[:8]}.json"
-            output_path.rename(target)
-            logging.debug(f"Unzipped file store as '{target}'")
-        else:
-            output_path.unlink()
-        print(f"\nSaved to '{timber_path}'\nYou can now open it in Timberborn map editor to add finishing touches.")
-    """
+    timber_map = TimberbornMap(config.game_version, singletons, tree_map.entities, MapperVersion=__version__)
     timber_path = timber_map.write(output_path, config)
     print(f"\nSaved to '{timber_path}'\nYou can now open it in Timberborn map editor to add finishing touches.")
     return timber_path
 
 
-def make_output_path(args: Any) -> Path:
+def make_output_path(args: Any, suffix=GameDefs.MAP_SUFFIX.value) -> Path:
     output_path = args.output
     if output_path:
-        if output_path.suffix != GameDefs.MAP_SUFFIX.value:
-            logging.warning(f"Output extension ('{output_path.suffix}') is not '{GameDefs.MAP_SUFFIX.value}'"
+        if output_path.suffix != suffix:
+            logging.warning(f"Output extension ('{output_path.suffix}') is not '{suffix}'"
                             f" it will be changed automatically.")
     elif args.maps_dir:
         output_path = Path(args.maps_dir) / args.input.with_suffix('.tmp').name
@@ -302,31 +172,78 @@ def manual_image_to_timberborn(args: Any) -> None:
 
 
 def read_json_input(config: Any) -> None:
-    with open(config.input, "r") as f:
-        data = json.load(f)
+    if config.input.suffix.lower() == GameDefs.MAP_SUFFIX.value:
+        with ZipFile(config.input) as timber_zip:
+            namelist = timber_zip.namelist()
+            if INTERNAL_ARC_NAME in namelist:
+                world_file_name = INTERNAL_ARC_NAME
+            else:
+                world_file_name = ""
+                logging.warning(
+                    f'"{config.input.basename}" doesn\'t include "{INTERNAL_ARC_NAME}"! Will use first ".json" file'
+                )
+                for name in namelist:
+                    if name.endswith(".json"):
+                        world_file_name = name
+                if not world_file_name:
+                    logging.error("No suitable file found!")
+                    raise RuntimeError("Input file doesn't contain expected data")
+
+            with timber_zip.open(world_file_name, "r") as world_file:
+                data = json.loads(world_file.read())
+    else:
+        with open(config.input, "r") as f:
+            data = json.load(f)
+
+    action_handler = ActionHandler()
+
     if "heightmap" in data.keys():
         logging.info("Found key 'heightmap' in json data, processing as spec file")
         specfile_to_timberborn(data, config)
     elif is_game_map(data):
-        logging.info(f"File looks like game map format, game version stated: {data.get('GameVersion', None)}")
+        action_handler.add_action(
+            code="export-terrain",
+            description=f'{BOLD}[BETA]{R} Export height map as PNG',
+            function=read_terrain,
+            args=(data, config),
+            kwargs={'output_path': make_output_path(config, suffix='.png')}
+        )
+
+        file_game_ver = data.get("GameVersion", None)
+        if is_game_save(data):
+            logging.info(f"File looks like game save format, game version stated: {file_game_ver}")
+        else:
+            logging.info(f"File looks like game map format, game version stated: {file_game_ver}")
+            if file_game_ver is None:
+                file_game_ver = "0"
+            file_game_ver = GameVer(file_game_ver)
+            base_str, diff_str = file_game_ver.diff_strings()
+            logging.info(f"Base ver: {base_str}")
+            logging.info(f"File ver: {diff_str}")
+            if file_game_ver.is_older_than_base():
+                logging.debug("Upgrade action is reasonable")
+            action_handler.add_action(
+                code="upgrade-map",
+                description=(
+                    f"{BOLD}[BETA]{R} upgrade map to version ~ '{config.game_version} and pack as "
+                    f"'{GameDefs.MAP_SUFFIX.value}'\n"
+                    f"\t{BOLD}{W1}warning{R}: this is an experimental feature, there is no gurantee it will work,\n"
+                    "\tit also might remove objects from the map.\n"
+                    f"\t{BOLD}note{R}: this may output a huge wall of text depending on log level"
+                ),
+                function=read_game_map,
+                args=(data, config),
+                kwargs={'output_path': make_output_path(config)}
+            )
+
         if config.non_interactive:
             # TODO guess action by GameVersion, force action by config args
-            logging.info("Non-interactive mode: assume map upgrade")
-            read_game_map(data, config, output_path=make_output_path(config))
+            logging.info(f"Non-interactive mode: assuming '{action_handler.get_action(1).code}'")
+            action_handler.run_action(1)
+
         else:
-            print("Select available action. (type number and press Enter)")
-            print(f"{BOLD}1{R}. {BOLD}[BETA]{R} upgrade map to version ~ '{config.game_version} and pack as '.timber'\n"
-                  f"\t{BOLD}{W1}warning{R}: this is an experimental feature, there is no gurantee it will work,\n"
-                  "\tit also might remove objects from the map.\n"
-                  f"\t{BOLD}note{R}: this may output a huge wall of text depending on log level")
-            print(f"{BOLD}0{R}. Abort and exit")
-            answer = ""
-            while answer not in ("0", "1", "q"):
-                answer = input("> ").strip().lower()
-            if answer == "1":
-                read_game_map(data, config, output_path=make_output_path(config))
-            else:
-                sys.exit("User abort")
+            action_handler.render_choices()
+            action_handler.run_by_input()
     else:
         logging.error("Can't identify file by content!")
 
@@ -435,7 +352,7 @@ def main() -> None:
     colorama.init()
 
     args = build_parser().parse_args()
-    config = MapperConfig(skip_values=["", "DEFAULT", -1])
+    config = MapperConfig(mapper_version=__version__, skip_values=["", "DEFAULT", -1])
 
     # configure logging
     loglevel = getattr(args, "loglevel", "INFO").upper()
@@ -541,15 +458,16 @@ def main() -> None:
 
     # wrapping execution in exception catcher to halt window form closing in interactive mode
     try:
-        if config.input.suffix.lower() == ".json":
-            logging.debug("JSON file will be read and handled based on contents")
+        suffix = config.input.suffix.lower()
+        if suffix in (".json", GameDefs.MAP_SUFFIX.value):
+            logging.debug(f' "{suffix}" file will be read and handled based on contents')
             read_json_input(config)
         else:
             logging.info("File will be verified and processed like an image")
             manual_image_to_timberborn(config)
     except Exception as exc:
         logging.critical(f"{W1}{BOLD}Exception happened!{R}")
-        contact_msg = "Please, contact developers abput the problem and include traceback:\n"
+        contact_msg = "If you can't figure it out, please contact developers about the problem and include traceback:\n"
         for dev, contacts in CONTACTS.items():
             contact_msg += f"{BOLD}{dev}{R}:\n"
             for title, value in contacts.items():

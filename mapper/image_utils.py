@@ -36,6 +36,22 @@ def read_monochrome_image(filename: Path, width: int, height: int) -> Image.Imag
     return image
 
 
+def build_image(height_array, size) -> Image.Image:
+    high = max(height_array)
+    color_step = round(255 / high)
+    color_array = [color_step * i for i in height_array]
+    # logging.debug(f"Intensity array: {color_array}")
+    image = Image.new("L", size, color=0)
+
+    index = 0
+    for x in range(0, size[0]):
+        for y in range(0, size[1]):
+            image.putpixel((x, y), color_array[index])
+            index += 1
+
+    return image
+
+
 class MapImage:
     image = None
     _normalized_data = None
