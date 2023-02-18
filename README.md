@@ -1,7 +1,7 @@
 # Timberborn-Mapper
 A tool for turning height maps into Timberborn maps.
 
-![](https://raw.githubusercontent.com/GinFuyou/Timberborn-Mapper/gins_refactor/assets/TimberbornMapper-700.png)
+![](https://raw.githubusercontent.com/GinFuyou/Timberborn-Mapper/main/assets/TimberbornMapper-700.png)
 > Screen cap is taken using QuadrupleTerrainHeight mod using 48 layers, vanilla game supports less.
 
 # About
