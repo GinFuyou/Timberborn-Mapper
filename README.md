@@ -10,36 +10,42 @@ A tool for turning height maps into Timberborn maps.
 1. Converts grayscale images into game map file with terrain.
 2. Adds trees and water from *additional* grayscale images.
 3. BETA: upgrades old `.json` maps to be loadable.
+4. BETA: export game maps into grayscale height maps.
 
 ## What it does NOT:
 1. Does not create maps fully ready to play: you need to add water sources and starting location in editor.
-2. Does not upgrade `.timber` maps.
-3. Does not export game maps into grayscale height maps. *(planned)*
+2. Does not work with save files. *(planned)*
 
 # Setup
 
-## Base install as python script
+## Option 1: (Windows-only) pre-build executable 
+Windows users can try script packaged as executable `.exe` file from [dist directory](dist/).
+
+__No dependencies or setup required__.
+
+Copy `examples/` dir to try suggested commands.
+
+> Paranoid A/V software can give false positive alert about executable files. Variant packaged as dir might look less suspicious to them, so try it if it's your case or just add exception.
+
+Virustotal gave  [4/70 score](https://www.virustotal.com/gui/file/7fdb18b8097ae138ace2ff792fcb83f6d28271174fe212a6d31ccd9474805d3f/detection), I believe it's safe for you to presume executable is safe.
+ 
+## Option 2: Cross-platform python script using poetry
+Using poetry
+
+1. Install python. You can find it [here](https://www.python.org/downloads/).
+2. Clone repository (Click the green "Code" button in github for directions to download this code.)
+3. Install [poetry](https://python-poetry.org/docs/)
+4. `poetry install` will install all dependencies from `pyproject.toml` and manages virtual environment
+5. `poetry shell` activates virtual environment for the project
+
+## Option 3: Cross-platform python script with manual dependencies
 1. Install python. You can find it [here](https://www.python.org/downloads/).
 2. Install pillow. You can read their instructions [here](https://pillow.readthedocs.io/en/stable/installation.html), or just open your command prompt and run "python -m pip install pillow".
 3. Click the green "Code" button in github for directions to download this code.
 
-## Windows binary
-Windows users can try script packaged as single executable file from [dist directory](dist/).
-No dependencies or setup required.
-Copy `examples/` dir to try suggested commands.
-
-## Alternatively (for advanced python users)
-Using poetry
-
-1. Clone repository
-2. Install [poetry](https://python-poetry.org/docs/)
-3. `poetry install` will install all dependencies from `pyproject.toml` and manages virtual environment
-4. `poetry shell` activates virtual environment for the project
-
-Currently project requires python 3.10 or 3.11 but may work on other versions.
+> Currently project requires python 3.10 or 3.11 but may work on other versions.
 
 # Usage
-
 
 ## Height map import
 - script expects a grayscale image as height map (most likely a PNG but some other formats should also work)
@@ -50,11 +56,13 @@ Currently project requires python 3.10 or 3.11 but may work on other versions.
 - Run `python mapper --help` to see instructions on how to use it.
 
 ### Binary version (Windows)
+You can just **drag-n-drop** height map image or `.json` / `.timber` file onto executable's icon or it's links. But can't set options directly this way.
+It will output **.timber** file into same place where input file was taken if game dir is not set with config file.
+
+Alternatively:
+
 - Open command promt (or powershell) and `cd` ("change directory" command) to the folder with executable.
 - Run `TimberbornMapper.exe --help` to see instructions on how to use it.
-
-You can also just **drag-n-drop** height map image or spec file onto executable's icon or it's links. But can't set options directly this way.
-It will output **.timber** file into same place where input file was taken.
 
 ## [BETA] Old map format upgrade
 If you input (manually or by drag'n'drop) a `.json` file of a old format game map, script will try to detect it's a map and will suggest to upgrade it,
