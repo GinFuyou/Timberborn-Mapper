@@ -34,8 +34,9 @@ class Goods(Enum):
 class TreeSpecies(Enum):
     birch = ("Birch", {"logs": 1, "gth_good": None})
     pine = ("Pine", {"logs": 2, "gth_good": Goods.PineResin, "gth_amount": 2})
-    maple = ("Maple", {"logs": 8, "gth_good": Goods.MapleSyrup, "gth_amount": 3})
+    maple = ("Maple", {"logs": 6, "gth_good": Goods.MapleSyrup, "gth_amount": 3})
     chestnut = ("ChestnutTree", {"logs": 4, "gth_good": Goods.Chestnut, "gth_amount": 3})
+    oak = ("Oak", {"logs": 8, "gth_good": None})
 
 
 class PlantSpecies(Enum):

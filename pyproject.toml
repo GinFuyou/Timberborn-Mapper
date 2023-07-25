@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "timberborn-mapper"
-version = "0.3.9-a"
+version = "0.4.10a1"
 description = "Tool for importing heightmap images as Timberborn custom maps."
 authors = ["Matthew McMullan", "Gin Fuyou"]
 license = "BSD 2-Clause \"Simplified\" License"
@@ -33,3 +33,5 @@ line_length = 128
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry_bumpversion.file."mapper/__main__.py"]

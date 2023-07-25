@@ -39,7 +39,7 @@ class LoadMixin():
             value = data.get(name)
             # value is not provided but attribute declared as optional
             was_fixed = False
-            # logging.debug(f" - check '{name}' of `{coerce_callable.__name__}`")
+            logging.debug(f" - check '{name}' of `{coerce_callable.__name__}`")
             if value is None:
                 if validator:
                     try:

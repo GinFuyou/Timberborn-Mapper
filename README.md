@@ -18,7 +18,7 @@ A tool for turning height maps into Timberborn maps.
 
 # Setup
 
-## Option 1: (Windows-only) pre-build executable 
+## Option 1: (Windows-only) pre-build executable
 Windows users can try script packaged as executable `.exe` file from [dist directory](dist/).
 
 __No dependencies or setup required__.
@@ -28,7 +28,7 @@ Copy `examples/` dir to try suggested commands.
 > Paranoid A/V software can give false positive alert about executable files. Variant packaged as dir might look less suspicious to them, so try it if it's your case or just add exception.
 
 Virustotal gave  [4/70 score](https://www.virustotal.com/gui/file/7fdb18b8097ae138ace2ff792fcb83f6d28271174fe212a6d31ccd9474805d3f/detection), I believe it's safe for you to presume executable is safe.
- 
+
 ## Option 2: Cross-platform python script using poetry
 Using poetry
 

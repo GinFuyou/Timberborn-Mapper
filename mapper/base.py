@@ -44,7 +44,7 @@ class MapperConfig(argparse.Namespace):
         "macos": "m",
         "linux": "w"     # change if game supports Linux _natively_
     }
-    _base_game_version = "0.3.5.1-fb48f47"
+    _base_game_version = "0.4.9.3-6c7fb02"
     _mapper_version = ""
 
     def __init__(self, mapper_version, skip_values=["", "DEFAULT"], **kwargs):

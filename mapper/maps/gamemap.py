@@ -47,12 +47,19 @@ ENTITY_TEMPLATES = {
     "ChestnutTree": {"validator": TreeValidator(species=TreeSpecies.chestnut),
                      "category": Categories.tree,
                      "params": TreeSpecies.chestnut.value[1]},
+    "Oak": {"validator": TreeValidator(species=TreeSpecies.oak),
+            "category": Categories.tree,
+            "params": TreeSpecies.oak.value[1]},
     "WaterSource": {"validator": WaterSourceValidator(), "category": Categories.landscape},
     "Barrier": {"validator": BlockValidator(), "category": Categories.landscape},
     "Slope":  {"validator": OrientableValidator(), "category": Categories.landscape},
     "UndergroundRuins": {"validator": OrientableValidator(), "category": Categories.features},  # TODO
     "StartingLocation": {"validator": OrientableValidator(), "category": Categories.features},  # TODO
 }
+
+ENTITY_REPLACE = {"ChestnutTree": "Pine",
+                  "Maple": "Oak"}
+
 ENTITY_TEMPLATES.update(
     {f"RuinColumnH{i}": {"validator": RuinValidator(), "category": Categories.ruins} for i in range(1, 9)}
 )
@@ -138,6 +145,7 @@ def read_game_map(data, config, output_path=None):
     remove_templates = []
     removed_entity_counts = {}
     entity_counts = {}
+    replaced_entity_counts = {}
     initial_entity_count = len(entity_data)
     counter = 0
 
@@ -173,7 +181,20 @@ def read_game_map(data, config, output_path=None):
 
         entity['Components'] = entity_dict['Components']
         if template:
+            # check if replace required
+            logging.debug(f"load template: '{entity.template}'")
+            if entity.template in ENTITY_REPLACE.keys():
+                replace_template_name = ENTITY_REPLACE[entity.template]
+                if config.no_entity_replace:
+                    logging.debug(f"Template '{entity.template}' should be replaced with "
+                                  f"{replace_template_name} but it was disabled.")
+                else:
+                    logging.debug(f"Replace {entity.template} with {replace_template_name}")
+                    inc_dict_counter(replaced_entity_counts, entity.template)
+                    template = ENTITY_TEMPLATES[replace_template_name]
+
             category = template['category']
+
             try:
                 if category == Categories.tree:
                     entity['Components'] = TimberbornTreeComponents.load(
@@ -218,6 +239,11 @@ def read_game_map(data, config, output_path=None):
             logging.info(f"{key: >18}: {val: >6}")
     else:
         logging.info("No entities in the file")
+
+    if replaced_entity_counts:
+        logging.info("Replaced entities")
+        for key, val in replaced_entity_counts.items():
+            logging.info(f"{key: >18}: {val: >6}")
 
     if remove_templates:
         logging.info(f"Removed entities with templates: {', '.join(remove_templates)}")

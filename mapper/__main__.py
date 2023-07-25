@@ -34,7 +34,7 @@ else:
 # |_|  |_\__,_|_|_||_|
 # Main
 
-__version__ = "0.3.9-a-2"
+__version__ = "0.4.10a1"
 
 APPNAME = "TimberbornMapper"
 # Original script creator
@@ -236,10 +236,16 @@ def read_json_input(config: Any) -> None:
                 kwargs={'output_path': make_output_path(config)}
             )
 
-        if config.non_interactive:
+        if config.select_action:
+            action_index = int(config.select_action)
+            logging.info(f"Auto-selected '{action_handler.get_action(action_index).code}'")
+            action_handler.run_action(action_index)
+
+        elif config.non_interactive:
             # TODO guess action by GameVersion, force action by config args
-            logging.info(f"Non-interactive mode: assuming '{action_handler.get_action(1).code}'")
-            action_handler.run_action(1)
+            action_index = 1
+            logging.info(f"Non-interactive mode: assuming '{action_handler.get_action(action_index).code}'")
+            action_handler.run_action(action_index)
 
         else:
             action_handler.render_choices()
@@ -337,12 +343,20 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Open config file with editor, editor command as argument or vi as default")
     """
     parser.add_argument('--keep-json', action='store_true', default='DEFAULT', help="Do not remove map .json after packing")
+    parser.add_argument('--replace-entities', action='store', default='DEFAULT',
+                        help="DEFAULT, 0, or JSON dictionary of original:target mapping of Entity Template IDs")
     # parser.add_argument('--write-config', action="store_true", help='Write (overwrite) config file at defualt location.')
     parser.add_argument('-l', '--loglevel', choices=('debug', 'info', 'warning', 'error', 'critical'), default='info',
                                help='Control additional output verbosity')
     # parser.add_argument('-C', '--nocolor', action="store_true", default='DEFAULT', help='Disable usage of colors in console')
 
-    parser.add_argument('-I', '--non-interactive', action='store_true', default='DEFAULT', help="Disable interactions")
+    parser.add_argument('-I', '--non-interactive', action='store_true', default='DEFAULT', help="Disable interactions"),
+
+    parser.add_argument('--no-entity-replace', action="store_true",
+                        help="Disable replacing outdated objects according to specification")
+
+    parser.add_argument('--select-action', action='store', default='',
+                        help="(ALPHA) automatically select interaction by number")
 
     return parser
 
