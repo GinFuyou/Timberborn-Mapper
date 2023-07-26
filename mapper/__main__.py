@@ -34,7 +34,7 @@ else:
 # |_|  |_\__,_|_|_||_|
 # Main
 
-__version__ = "0.4.10a1"
+__version__ = "0.4.10a2"
 
 APPNAME = "TimberbornMapper"
 # Original script creator
