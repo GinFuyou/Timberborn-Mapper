@@ -6,9 +6,9 @@ from image_utils import build_image
 
 from .format import (TimberbornEntity, TimberbornMap, TimberbornMapSize, TimberbornPlantComponents, TimberbornRuinComponents,
                      TimberbornSingletons, TimberbornSoilMoistureSimulator, TimberbornTerrainMap, TimberbornTreeComponents,
-                     TimberbornWaterMap, TimberbornWaterSourceComponents)
+                     TimberbornWaterMap, TimberbornWaterSourceComponents, TimberbornBlockObject)
 # TimberbornSimpleComponents
-from .treemap import PlantSpecies, TreeSpecies  # Goods
+from .treemap import PlantSpecies, TreeSpecies, Tree  # Goods
 from .validation import BlockValidator, OrientableValidator, PlantValidator, RuinValidator, TreeValidator, WaterSourceValidator
 
 MAP_FORMAT_ELEMENTS = {"GameVersion": (str, int), "Singletons": dict, "Entities": list}
@@ -36,19 +36,25 @@ ENTITY_TEMPLATES = {
     "BlueberryBush": {"validator": PlantValidator(species=PlantSpecies.blueberry), "category": Categories.plant},
     "Birch": {"validator": TreeValidator(species=TreeSpecies.birch),
               "category": Categories.tree,
-              "params": TreeSpecies.birch.value[1]},
+              "params": TreeSpecies.birch.value[1],
+              "species": TreeSpecies.birch},
     "Pine": {
                 "validator": TreeValidator(species=TreeSpecies.pine),
-                "category": Categories.tree, "params": TreeSpecies.pine.value[1]
+                "category": Categories.tree,
+                "species": TreeSpecies.pine,
+                "params": TreeSpecies.pine.value[1]
             },
     "Maple": {"validator": TreeValidator(species=TreeSpecies.maple),
               "category": Categories.tree,
+              "species": TreeSpecies.maple,
               "params": TreeSpecies.maple.value[1]},
     "ChestnutTree": {"validator": TreeValidator(species=TreeSpecies.chestnut),
                      "category": Categories.tree,
+                     "species": TreeSpecies.chestnut,
                      "params": TreeSpecies.chestnut.value[1]},
     "Oak": {"validator": TreeValidator(species=TreeSpecies.oak),
             "category": Categories.tree,
+            "species": TreeSpecies.oak,
             "params": TreeSpecies.oak.value[1]},
     "WaterSource": {"validator": WaterSourceValidator(), "category": Categories.landscape},
     "Barrier": {"validator": BlockValidator(), "category": Categories.landscape},
@@ -63,6 +69,18 @@ ENTITY_REPLACE = {"ChestnutTree": "Pine",
 ENTITY_TEMPLATES.update(
     {f"RuinColumnH{i}": {"validator": RuinValidator(), "category": Categories.ruins} for i in range(1, 9)}
 )
+
+
+def replace_tree(components_dict: dict, replace_template: dict) -> dict:
+    # print(type(components_dict))
+    block_object = TimberbornBlockObject(**components_dict["BlockObject"])
+    tree = Tree(species=replace_template["species"],
+                alive=not components_dict.get('WateredObject', {'IsDry': False})['IsDry'],
+                **block_object.get_coords())
+    entity = tree.as_entity(components_dict)
+    # from pprint import pprint
+    # pprint(entity)
+    return dict(entity)
 
 
 def is_game_map(data):
@@ -118,7 +136,7 @@ def read_terrain(data, config, output_path=None):
     terrain_map = loaded_singletons['TerrainMap']
     map_size = loaded_singletons['MapSize']['Size'].value
     heights_array = terrain_map['Heights'].array_list
-    logging.debug(f"Map size: {map_size}")
+    logging.info(f"Map size: {map_size}")
 
     image = build_image(heights_array, map_size)
 
@@ -133,6 +151,9 @@ def read_terrain(data, config, output_path=None):
 def read_game_map(data, config, output_path=None):
 
     loaded_singletons = load_singletons(data["Singletons"])
+
+    map_size = loaded_singletons['MapSize']['Size'].value
+    logging.info(f"Map size: {map_size[0]} x {map_size[1]}")
 
     # import pprint
     # logging.debug("Loaded singletons: ")
@@ -192,6 +213,13 @@ def read_game_map(data, config, output_path=None):
                     logging.debug(f"Replace {entity.template} with {replace_template_name}")
                     inc_dict_counter(replaced_entity_counts, entity.template)
                     template = ENTITY_TEMPLATES[replace_template_name]
+                    # from pprint import pprint
+                    # logging.debug(f"Entity: ")
+                    # pprint(entity['Components'])
+                    # logging.debug(f"Replace params: {template.get('params')}")
+                    if not template["category"] == Categories.tree:
+                        raise NotImplementedError(f"Can replace onyl trees, tried Category {template['category']}")
+                    entity['Components'] = replace_tree(entity['Components'], template)
 
             category = template['category']
 

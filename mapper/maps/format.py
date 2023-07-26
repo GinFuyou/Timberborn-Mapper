@@ -216,6 +216,10 @@ class TimberbornBlockObject(LoadMixin, dict):
         if Orientation:
             self['Orientation'] = Orientation
 
+    def get_coords(self, lower_keys=True):
+        keys = ("x", "y", "z") if lower_keys else ('X', 'Y', 'Z')
+        return {key: self['Coordinates'][key.upper()] for key in keys}
+
     @classmethod
     def load(Cls, data: dict, _validator=Validator(), raise_error=True):
         return super().load(data, _validator)

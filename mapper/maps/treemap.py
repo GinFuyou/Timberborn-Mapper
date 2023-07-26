@@ -6,7 +6,7 @@
 # Tree Map
 import logging
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional
@@ -51,27 +51,24 @@ class Tree:
     y: int
     z: int
     alive: bool
+    _entity: TimberbornTree = field(default=None, repr=False)
 
-
-@dataclass
-class TreeMap:
-    trees: List[Tree]
-
-    @property
-    def entities(self) -> List[TimberbornEntity]:
-        entities: List[TimberbornEntity] = []
-        for tree in self.trees:
-            species_dict = tree.species.value[1]
+    def as_entity(self, components: dict = {}):
+        if not self._entity:
+            species_dict = self.species.value[1]
             components_kwargs = {
-                "BlockObject": TimberbornBlockObject(
-                            Coordinates=TimberbornCoordinates(X=tree.x, Y=tree.y, Z=tree.z),
+                "BlockObject": components.get("BlockObject") or TimberbornBlockObject(
+                            Coordinates=TimberbornCoordinates(X=self.x, Y=self.y, Z=self.z),
                             Orientation=TimberbornOrientation(),
                         ),
-                "CoordinatesOffseter": TimberbornCoordinatesOffseter.random(),
-                "Growable": TimberbornGrowable(1.0),
-                "LivingNaturalResource": TimberbornLivingNaturalResource(IsDead=not tree.alive),
-                "NaturalResourceModelRandomizer": TimberbornNaturalResourceModelRandomizer.random(),
-                "WateredObject": TimberbornWateredObject(IsDry=not tree.alive),
+                "CoordinatesOffseter": components.get("CoordinatesOffseter") or TimberbornCoordinatesOffseter.random(),
+                "Growable": components.get("Growable") or TimberbornGrowable(1.0),
+                "LivingNaturalResource": TimberbornLivingNaturalResource(IsDead=not self.alive),
+                "NaturalResourceModelRandomizer": (
+                    components.get("NaturalResourceModelRandomizer")
+                    or TimberbornNaturalResourceModelRandomizer.random()
+                ),
+                "WateredObject": TimberbornWateredObject(IsDry=not self.alive),
                 "YielderCuttable": TimberbornYielderCuttable(Id=Goods.Log.value, Amount=species_dict['logs']),
             }
             # add gatherables if tree has it
@@ -85,12 +82,21 @@ class TreeMap:
                                          )
                 })
 
-            entities.append(
-                TimberbornTree(
-                    species=tree.species.value[0],
-                    Components=TimberbornTreeComponents(**components_kwargs),
-                )
+            self._entity = TimberbornTree(
+                species=self.species.value[0],
+                Components=TimberbornTreeComponents(**components_kwargs),
             )
+        # print(repr(self))  # WARNING DEBUG
+        return self._entity
+
+
+@dataclass
+class TreeMap:
+    trees: List[Tree]
+
+    @property
+    def entities(self) -> List[TimberbornEntity]:
+        entities: List[TimberbornEntity] = [tree.as_entity() for tree in self.trees]
         return entities
 
 
@@ -128,10 +134,10 @@ def read_tree_map(heightmap: Heightmap, water_map: WaterMap, path: Path, spec: O
             species = TreeSpecies.birch
         elif pixel < spec.pine_cutoff:
             species = TreeSpecies.pine
-        elif pixel < spec.chestnut_cutoff:
-            species = TreeSpecies.chestnut
+        elif pixel < spec.chestnut_cutoff:  # TODO check specs
+            species = TreeSpecies.pine
         else:
-            species = TreeSpecies.maple
+            species = TreeSpecies.oak
 
         key = species.value[0]
         if key not in tree_counts.keys():
