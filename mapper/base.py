@@ -202,6 +202,7 @@ class ActionHandler:
 
     def run_action(self, index):
         action = self.get_action(index)
+        logging.debug(f"Selected action: {action.code}")
         return action.function(*action.args, **action.kwargs)
 
     def get_action(self, index):

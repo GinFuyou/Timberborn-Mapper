@@ -16,7 +16,7 @@ import colorama
 from appdirs import AppDirs
 from base import CONFIG_FILE, CONTACTS, DEFAULT_TOML, ActionHandler, GameDefs, GameVer, MapperConfig
 from maps.format import INTERNAL_ARC_NAME, TimberbornMap, TimberbornSingletons
-from maps.gamemap import is_game_map, is_game_save, read_game_map, read_terrain
+from maps.gamemap import is_game_map, is_game_save, read_game_map, read_terrain, ascii_preview
 from maps.heightmap import ImageToTimberbornHeightmapLinearConversionSpec, ImageToTimberbornHeightmapSpec, read_heightmap
 from maps.treemap import ImageToTimberbornTreemapSpec, read_tree_map
 from maps.watermap import read_water_map
@@ -34,7 +34,7 @@ else:
 # |_|  |_\__,_|_|_||_|
 # Main
 
-__version__ = "0.4.10a2"
+__version__ = "0.4.10a3"
 
 APPNAME = "TimberbornMapper"
 # Original script creator
@@ -207,6 +207,13 @@ def read_json_input(config: Any) -> None:
             function=read_terrain,
             args=(data, config),
             kwargs={'output_path': make_output_path(config, suffix='.png')}
+        )
+        action_handler.add_action(
+            code="map-ascii",
+            description=f'{BOLD}[BETA]{R} shom map preview as ASCII',
+            function=ascii_preview,
+            args=(data, config),
+            kwargs={}
         )
 
         file_game_ver = data.get("GameVersion", None)

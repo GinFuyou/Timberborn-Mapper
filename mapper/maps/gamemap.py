@@ -1,8 +1,9 @@
 import logging
 from datetime import datetime
 from enum import Enum
+from PIL import Image
 
-from image_utils import build_image
+from image_utils import build_image, prepare_color_matrix
 
 from .format import (TimberbornEntity, TimberbornMap, TimberbornMapSize, TimberbornPlantComponents, TimberbornRuinComponents,
                      TimberbornSingletons, TimberbornSoilMoistureSimulator, TimberbornTerrainMap, TimberbornTreeComponents,
@@ -131,6 +132,40 @@ def load_singletons(singletons_data) -> TimberbornSingletons:
     return TimberbornSingletons(**loaded_singletons)
 
 
+def ascii_preview(data, config, resize_to_max=40):
+    loaded_singletons = load_singletons(data["Singletons"])
+    terrain_map = loaded_singletons['TerrainMap']
+    map_size = loaded_singletons['MapSize']['Size'].value
+    heights_array = terrain_map['Heights'].array_list
+    logging.info(f"Map size: {map_size}")
+
+    height_grades = ["█", "▓", "▒", "░", " "]
+    height_grades.reverse()
+
+    color_matrix = prepare_color_matrix(heights_array, map_size, grades=len(height_grades)-1)
+
+    image = Image.new(size=map_size, mode="L")
+    range_x = range(0, len(color_matrix[0]))
+    range_y = range(0, len(color_matrix))
+    for x in range_x:
+        for y in range_y:
+            image.putpixel((x, y), color_matrix[x][y])
+
+    # from PIL import ImageFilter
+    # image = image.filter(ImageFilter.SMOOTH)
+    # image.show()
+    image.thumbnail((resize_to_max, resize_to_max))
+    logging.debug(f"Resized preview to {image.size}")
+
+    for y in range(0, image.size[1]):
+        row = []
+        for x in range(0, image.size[0]):
+            value = image.getpixel((x, y))
+            symbol = height_grades[value]*2  # 2 symbols to make map wide enough
+            row.append(symbol)
+        print("".join(row))
+
+
 def read_terrain(data, config, output_path=None):
     loaded_singletons = load_singletons(data["Singletons"])
     terrain_map = loaded_singletons['TerrainMap']
@@ -154,10 +189,6 @@ def read_game_map(data, config, output_path=None):
 
     map_size = loaded_singletons['MapSize']['Size'].value
     logging.info(f"Map size: {map_size[0]} x {map_size[1]}")
-
-    # import pprint
-    # logging.debug("Loaded singletons: ")
-    # pprint.pprint(loaded_singletons)
 
     entity_data = data['Entities']
     loaded_entities = []

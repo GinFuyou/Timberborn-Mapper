@@ -7,6 +7,7 @@
 import logging
 from pathlib import Path
 from typing import List
+from math import floor
 
 from PIL import Image, ImageOps
 
@@ -34,6 +35,24 @@ def read_monochrome_image(filename: Path, width: int, height: int) -> Image.Imag
         image = image.resize((image.width, height))
 
     return image
+
+
+def prepare_color_matrix(height_array, map_size, grades=4) -> List:
+    highest = max(height_array)
+    lowest = min(height_array)
+    color_step = grades / (highest - lowest)
+
+    input_index = 0
+    color_matrix = []
+    for y in range(0, map_size[1]):
+        color_matrix.append([])
+        for x in range(0, map_size[0]):
+            elevation = height_array[input_index] - lowest
+            color_matrix[y].append(floor(color_step * elevation))
+            # logging.debug(f" height: {height_array[input_index]}, normalized: {color_step * elevation}")
+            input_index += 1
+
+    return color_matrix
 
 
 def build_image(height_array, size) -> Image.Image:
